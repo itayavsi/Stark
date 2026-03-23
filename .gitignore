@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+*.egg
+
+# Node
+node_modules/
+frontend/build/
+.npm
+
+# Env
+.env
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Uploads
+backend/storage/uploaded_shapes/*
+!backend/storage/uploaded_shapes/.gitkeep

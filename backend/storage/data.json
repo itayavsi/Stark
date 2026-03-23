@@ -1,0 +1,90 @@
+{
+  "users": [
+    {
+      "id": "user-001",
+      "username": "admin",
+      "password": "admin123",
+      "role": "Team Leader",
+      "group": "לווינות",
+      "display_name": "מנהל ראשי"
+    },
+    {
+      "id": "user-002",
+      "username": "user1",
+      "password": "pass123",
+      "role": "User",
+      "group": "לווינות",
+      "display_name": "יוסי כהן"
+    },
+    {
+      "id": "user-003",
+      "username": "viewer1",
+      "password": "view123",
+      "role": "Viewer",
+      "group": "לווינות",
+      "display_name": "צופה ראשון"
+    }
+  ],
+  "quests": [
+    {
+      "id": "quest-001",
+      "title": "סריקת אזור צפון - סקטור A",
+      "description": "ביצוע סריקה מלאה של אזור צפון סקטור A וסימון כל הנקודות על המפה",
+      "status": "Open",
+      "date": "2026-03-20",
+      "assigned_user": null,
+      "shapefile_path": "/shared/quests/quest-001/",
+      "group": "לווינות",
+      "year": 2026,
+      "ft": "FT1"
+    },
+    {
+      "id": "quest-002",
+      "title": "מיפוי גבולות דרום - מקטע B",
+      "description": "עדכון גבולות אזור דרום לפי נתוני 2026",
+      "status": "Taken",
+      "date": "2026-03-18",
+      "assigned_user": "יוסי כהן",
+      "shapefile_path": null,
+      "group": "לווינות",
+      "year": 2026,
+      "ft": "FT2"
+    },
+    {
+      "id": "quest-003",
+      "title": "עדכון שכבת 2025 - מרכז",
+      "description": "עדכון נתוני שנת 2025 עבור האזור המרכזי",
+      "status": "Done",
+      "date": "2026-03-15",
+      "assigned_user": "יוסי כהן",
+      "shapefile_path": null,
+      "group": "לווינות",
+      "year": 2025,
+      "ft": "FT3"
+    },
+    {
+      "id": "quest-004",
+      "title": "בדיקת נקודות ציון ישנות - 2024",
+      "description": "ביקורת על נקודות ציון שנת 2024 ועדכון במידת הצורך",
+      "status": "Done",
+      "date": "2026-03-10",
+      "assigned_user": "מנהל ראשי",
+      "shapefile_path": "/shared/quests/quest-004/",
+      "group": "לווינות",
+      "year": 2024,
+      "ft": "FT4"
+    },
+    {
+      "id": "quest-005",
+      "title": "סריקת מסלולי גישה - מזרח",
+      "description": "תיעוד כל מסלולי הגישה באזור מזרח",
+      "status": "Approved",
+      "date": "2026-03-05",
+      "assigned_user": "מנהל ראשי",
+      "shapefile_path": "/shared/quests/quest-005/",
+      "group": "לווינות",
+      "year": 2026,
+      "ft": "FT5"
+    }
+  ]
+}
