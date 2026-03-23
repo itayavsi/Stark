@@ -1,6 +1,8 @@
 // Simplified Natural Earth world map — bundled for offline use
 // Coordinates are simplified but geographically accurate outlines
-const WORLD_GEOJSON = {
+import type { GeoFeatureCollection } from '../types/domain';
+
+const WORLD_GEOJSON: GeoFeatureCollection = {
   type: "FeatureCollection",
   features: [
     // ── Americas ──────────────────────────────────────────

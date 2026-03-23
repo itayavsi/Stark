@@ -1,57 +1,56 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import Navbar from '../components/Navbar.jsx';
-import MapView from '../components/MapView.jsx';
-import QuestPanel from '../components/QuestPanel.jsx';
-import AttributeTable from '../components/AttributeTable.jsx';
-import { getQuests } from '../services/api';
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
+
+import AttributeTable from '../components/AttributeTable';
+import MapView from '../components/MapView';
+import Navbar from '../components/Navbar';
+import QuestPanel from '../components/QuestPanel';
+import { useQuests } from '../hooks/useQuests';
+import { getFeaturePoint } from '../utils/geo';
+import type { AppLayer, LngLatPoint, Quest } from '../types/domain';
 
 const MIN_WIDTH     = 220;
 const MAX_WIDTH     = 600;
 const DEFAULT_WIDTH = 300;
 
 export default function HomePage() {
-  const [quests, setQuests]               = useState([]);
-  const [panelOpen, setPanelOpen]         = useState(true);
-  const [loading, setLoading]             = useState(true);
-  const [focusCoords, setFocusCoords]     = useState(null);
-  const [pendingLayers, setPendingLayers] = useState([]);
-  const [tableLayers, setTableLayers]     = useState([]);
-  const [tableOpen, setTableOpen]         = useState(false);
-  const [tableHeight, setTableHeight]       = useState(260);
-  const [dragTable, setDragTable]           = useState(false);
+  const { quests, loading, refresh } = useQuests();
+  const [panelOpen, setPanelOpen] = useState(true);
+  const [focusCoords, setFocusCoords] = useState<LngLatPoint | null>(null);
+  const [pendingLayers, setPendingLayers] = useState<AppLayer[]>([]);
+  const [tableLayers, setTableLayers] = useState<AppLayer[]>([]);
+  const [tableOpen, setTableOpen] = useState(false);
+  const [tableHeight, setTableHeight] = useState(260);
+  const [dragTable, setDragTable] = useState(false);
   const dragTableStartY = useRef(0);
   const dragTableStartH = useRef(260);
-  const [panelWidth, setPanelWidth]       = useState(DEFAULT_WIDTH);
-  const [dragging, setDragging]           = useState(false);
+  const [panelWidth, setPanelWidth] = useState(DEFAULT_WIDTH);
+  const [dragging, setDragging] = useState(false);
 
   const dragStartX = useRef(0);
   const dragStartW = useRef(DEFAULT_WIDTH);
 
-  useEffect(() => {
-    getQuests()
-      .then(setQuests)
-      .catch(console.error)
-      .finally(() => setLoading(false));
+  const handleLayerAdded = useCallback((layer: AppLayer) => {
+    setPendingLayers((prev) => [...prev, layer]);
   }, []);
 
-  const refreshQuests        = () => getQuests().then(setQuests).catch(console.error);
-  const handleLayerAdded     = (layer)  => setPendingLayers(prev => [...prev, layer]);
-  const handleOpenTable      = (layers) => { setTableLayers(layers); setTableOpen(true); };
-  const handleLayersConsumed = ()       => setPendingLayers([]);
+  const handleOpenTable = useCallback((layers: AppLayer[]) => {
+    setTableLayers(layers);
+    setTableOpen(true);
+  }, []);
 
-  const handleHighlightFeature = (layer, featureIdx) => {
+  const handleLayersConsumed = useCallback(() => {
+    setPendingLayers([]);
+  }, []);
+
+  const handleHighlightFeature = useCallback((layer: AppLayer, featureIdx: number) => {
     const feature = (layer.geojson?.features || layer.data?.features || [])[featureIdx];
-    if (!feature?.geometry) return;
-    const getPoint = (c) => {
-      if (typeof c[0] === 'number') return c;
-      if (Array.isArray(c[0])) return getPoint(c[0]);
-      return null;
-    };
-    const pt = getPoint(feature.geometry.coordinates);
-    if (pt) setFocusCoords({ lng: pt[0], lat: pt[1] });
-  };
+    const point = getFeaturePoint(feature);
+    if (point) {
+      setFocusCoords(point);
+    }
+  }, []);
 
-  const onMouseDown = useCallback((e) => {
+  const onMouseDown = useCallback((e: MouseEvent<HTMLDivElement>) => {
     e.preventDefault();
     dragStartX.current = e.clientX;
     dragStartW.current = panelWidth;
@@ -78,7 +77,7 @@ export default function HomePage() {
   }, [dragging]);
 
   // ── Table vertical drag ───────────────────────────────
-  const onTableHandleDown = useCallback((e) => {
+  const onTableHandleDown = useCallback((e: MouseEvent<HTMLDivElement>) => {
     e.preventDefault();
     dragTableStartY.current = e.clientY;
     dragTableStartH.current = tableHeight;
@@ -161,9 +160,11 @@ export default function HomePage() {
               <QuestPanel
                 quests={quests}
                 loading={loading}
-                onRefresh={refreshQuests}
-                onShowOnMap={(quest) => {
-                  if (quest.lng && quest.lat) setFocusCoords({ lng: quest.lng, lat: quest.lat });
+                onRefresh={refresh}
+                onShowOnMap={(quest: Quest) => {
+                  if (typeof quest.lng === 'number' && typeof quest.lat === 'number') {
+                    setFocusCoords({ lng: quest.lng, lat: quest.lat });
+                  }
                 }}
                 onLayerAdded={handleLayerAdded}
                 onOpenTable={handleOpenTable}
@@ -178,7 +179,7 @@ export default function HomePage() {
   );
 }
 
-const S = {
+const S: Record<string, CSSProperties> = {
   shell: {
     display: 'flex',
     flexDirection: 'column',

@@ -1,25 +1,27 @@
-import React, { useState } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { setSelectedGroup } from '../lib/session';
 
 const GROUPS = [
   { id: 'lavyanut', name: 'לווינות', icon: '🛰️', active: true,  desc: 'מיפוי ולווינות שדה' },
   { id: 'group2',   name: 'קבוצה ב', icon: '🗺️', active: false, desc: 'בקרוב' },
   { id: 'group3',   name: 'קבוצה ג', icon: '📡', active: false, desc: 'בקרוב' },
-];
+] as const;
 
 export default function GroupPage() {
-  const navigate  = useNavigate();
-  const user      = JSON.parse(localStorage.getItem('user') || '{}');
-  const [hovered, setHovered] = useState(null);
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
+  const [hovered, setHovered] = useState<string | null>(null);
 
-  const handleSelect = (group) => {
+  const handleSelect = (group: (typeof GROUPS)[number]) => {
     if (!group.active) return;
-    localStorage.setItem('selectedGroup', group.id);
+    setSelectedGroup(group.id);
     navigate('/app');
   };
 
   const handleLogout = () => {
-    localStorage.clear();
+    logout();
     navigate('/login');
   };
 
@@ -31,7 +33,7 @@ export default function GroupPage() {
         <div style={S.header}>
           <div>
             <h1 style={S.title}>בחר קבוצה</h1>
-            <p style={S.subtitle}>שלום, {user.display_name || user.username}</p>
+            <p style={S.subtitle}>שלום, {user?.display_name || user?.username}</p>
           </div>
           <button className="btn btn-ghost btn-sm" onClick={handleLogout}>
             יציאה
@@ -41,7 +43,7 @@ export default function GroupPage() {
         {/* Role badge */}
         <div style={S.roleBadge}>
           <span style={S.roleLabel}>תפקיד: </span>
-          <span style={S.roleValue}>{user.role}</span>
+          <span style={S.roleValue}>{user?.role}</span>
         </div>
 
         {/* Group cards */}
@@ -79,7 +81,7 @@ export default function GroupPage() {
   );
 }
 
-const S = {
+const S: Record<string, CSSProperties> = {
   page: {
     minHeight: '100vh',
     display: 'flex',

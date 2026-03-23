@@ -1,22 +1,27 @@
-import React from 'react';
+import type { CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 const ROLE_LABELS = {
   'Team Leader': 'מנהל צוות',
   'User': 'משתמש',
   'Viewer': 'צופה',
-};
+} as const;
 
-export default function Navbar({ onTogglePanel, panelOpen }) {
+interface NavbarProps {
+  onTogglePanel: () => void;
+  panelOpen: boolean;
+}
+
+export default function Navbar({ onTogglePanel, panelOpen }: NavbarProps) {
   const navigate = useNavigate();
-  // Always read fresh from localStorage — never crashes if prop missing
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
-  const displayName = user.display_name || user.username || '?';
-  const role        = ROLE_LABELS[user.role] || user.role || '';
-  const avatar      = displayName[0].toUpperCase();
+  const { user, logout } = useAuth();
+  const displayName = user?.display_name || user?.username || '?';
+  const role = ROLE_LABELS[user?.role as keyof typeof ROLE_LABELS] || user?.role || '';
+  const avatar = displayName[0]?.toUpperCase() || '?';
 
   const handleLogout = () => {
-    localStorage.clear();
+    logout();
     navigate('/login');
   };
 
@@ -59,7 +64,7 @@ export default function Navbar({ onTogglePanel, panelOpen }) {
   );
 }
 
-const S = {
+const S: Record<string, CSSProperties> = {
   nav: {
     height: 52,
     background: 'var(--surface)',

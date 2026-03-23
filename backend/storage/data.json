@@ -85,6 +85,18 @@
       "group": "לווינות",
       "year": 2026,
       "ft": "FT5"
+    },
+    {
+      "id": "8f0106ea-98d2-4515-996a-9313ce204bda",
+      "title": "סכגג",
+      "description": "סדגכ",
+      "status": "Open",
+      "date": null,
+      "assigned_user": null,
+      "shapefile_path": null,
+      "group": "לווינות",
+      "year": 2026,
+      "ft": "FT1"
     }
   ]
 }

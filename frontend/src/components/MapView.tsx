@@ -1,9 +1,10 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import FALLBACK_WORLD from '../services/worldMap';
 
-import { ftColor, FT_COLORS } from '../services/ftConfig';
+import { FT_COLORS, ftColor } from '../services/ftConfig';
+import type { AppLayer, GeoFeatureCollection, LngLatPoint } from '../types/domain';
 
 // Continent fill colors
 const CONTINENT_FILL = [
@@ -17,7 +18,7 @@ const CONTINENT_FILL = [
   '#1a2540',
 ];
 
-function buildStyle(worldData) {
+function buildStyle(worldData: GeoFeatureCollection) {
   return {
     version: 8,
     name: 'GIS Offline',
@@ -81,21 +82,36 @@ const LABELS = [
   { he: 'ניז\'ר',      en: 'Niger',         lon: 8,     lat: 17,    minZoom: 4 },
 ];
 
+interface MapViewProps {
+  focusCoords: LngLatPoint | null;
+  layers: AppLayer[];
+  onLayersChange?: () => void;
+}
+
+interface LayerState {
+  id: string;
+  name: string;
+  visible: boolean;
+  color: string;
+  year?: number;
+  ft?: string;
+}
+
 let layerCounter = 0;
 
-export default function MapView({ focusCoords, layers, onLayersChange }) {
-  const containerRef = useRef(null);
-  const mapRef       = useRef(null);
-  const markersRef   = useRef([]);
-  const [mapReady, setMapReady]   = useState(false);
-  const [layerList, setLayerList] = useState([]);
+export default function MapView({ focusCoords, layers, onLayersChange }: MapViewProps) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<maplibregl.Map | null>(null);
+  const markersRef = useRef<maplibregl.Marker[]>([]);
+  const [mapReady, setMapReady] = useState(false);
+  const [layerList, setLayerList] = useState<LayerState[]>([]);
   const [showPanel, setShowPanel] = useState(false);
-  const [mapSrc, setMapSrc]       = useState('...');
-  const [tooltip, setTooltip]     = useState(null);
+  const [mapSrc, setMapSrc] = useState('...');
+  const [tooltip, setTooltip] = useState<{ name: string; continent: string; x: number; y: number } | null>(null);
 
   // ── Render HTML country labels ─────────────────────────────
-  const renderLabels = useCallback((map) => {
-    markersRef.current.forEach(m => m.remove());
+  const renderLabels = useCallback((map: maplibregl.Map) => {
+    markersRef.current.forEach((marker) => marker.remove());
     markersRef.current = [];
     const z = map.getZoom();
 
@@ -134,14 +150,14 @@ export default function MapView({ focusCoords, layers, onLayersChange }) {
         const res = await fetch('/world.geojson');
         if (res.ok) {
           const dl = await res.json();
-          if (dl?.features?.length > 50) { worldData = dl; src = 'Natural Earth'; }
+          if (dl?.features?.length > 50) { worldData = dl as GeoFeatureCollection; src = 'Natural Earth'; }
         }
       } catch { /* use fallback */ }
       setMapSrc(src);
 
       const map = new maplibregl.Map({
         container: containerRef.current,
-        style: buildStyle(worldData),
+        style: buildStyle(worldData) as any,
         center: [20, 20],
         zoom: 2.5,
         attributionControl: false,
@@ -157,8 +173,8 @@ export default function MapView({ focusCoords, layers, onLayersChange }) {
 
         // Hover effect
         let hovId = null;
-        map.on('mousemove', 'countries-fill', (e) => {
-          if (!e.features.length) return;
+        map.on('mousemove', 'countries-fill', (e: any) => {
+          if (!e.features?.length) return;
           map.getCanvas().style.cursor = 'crosshair';
           const feat = e.features[0];
           if (hovId !== null && hovId !== feat.id) map.setFeatureState({ source: 'world', id: hovId }, { hover: false });
@@ -194,12 +210,14 @@ export default function MapView({ focusCoords, layers, onLayersChange }) {
   useEffect(() => {
     if (!mapReady || !layers?.length) return;
     const map = mapRef.current;
-    layers.forEach(layer => {
+    if (!map) return;
+
+    layers.forEach((layer) => {
       if (!layer.data) return;
       const id = `ql-${++layerCounter}`;
       const color = ftColor(layer.ft);
       if (map.getSource(id)) return;
-      map.addSource(id, { type: 'geojson', data: layer.data });
+      map.addSource(id, { type: 'geojson', data: layer.data as any });
       const t = layer.data?.features?.[0]?.geometry?.type || 'Point';
       if (t.includes('Polygon')) {
         map.addLayer({ id: `${id}-fill`, type: 'fill',   source: id, paint: { 'fill-color': color, 'fill-opacity': 0.4 } });
@@ -209,20 +227,19 @@ export default function MapView({ focusCoords, layers, onLayersChange }) {
       } else {
         map.addLayer({ id: `${id}-pt`,   type: 'circle', source: id, paint: { 'circle-radius': 6, 'circle-color': color, 'circle-stroke-color': '#fff', 'circle-stroke-width': 1.5 } });
       }
-      setLayerList(prev => [...prev, { id, name: layer.name || id, visible: true, color, year: layer.year || 2026 }]);
+      setLayerList((prev) => [...prev, { id, name: layer.name || id, visible: true, color, year: layer.year || 2026, ft: layer.ft }]);
     });
-    if (onLayersChange) onLayersChange([]);
-  // eslint-disable-next-line
+    onLayersChange?.();
   }, [layers, mapReady]);
 
-  const toggleLayer = (id, vis) => {
+  const toggleLayer = (id: string, vis: boolean) => {
     const map = mapRef.current; if (!map) return;
     const v = vis ? 'none' : 'visible';
     ['fill','line','pt'].forEach(s => { const l=`${id}-${s}`; if(map.getLayer(l)) map.setLayoutProperty(l,'visibility',v); });
     setLayerList(prev => prev.map(l => l.id === id ? { ...l, visible: !vis } : l));
   };
 
-  const removeLayer = (id) => {
+  const removeLayer = (id: string) => {
     const map = mapRef.current; if (!map) return;
     ['fill','line','pt'].forEach(s => { const l=`${id}-${s}`; if(map.getLayer(l)) map.removeLayer(l); });
     if (map.getSource(id)) map.removeSource(id);
@@ -304,7 +321,7 @@ export default function MapView({ focusCoords, layers, onLayersChange }) {
   );
 }
 
-const S = {
+const S: Record<string, CSSProperties> = {
   wrap: { width: '100%', height: '100%', position: 'relative', background: '#08111e' },
   map:  { width: '100%', height: '100%' },
   tooltip: {

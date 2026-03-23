@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type CSSProperties, type MouseEvent } from 'react';
 import { takeQuest, setQuestStatus, uploadShapefile, getLayerData } from '../services/api';
-import { ftColor, FT_COLORS } from '../services/ftConfig';
+import { ftColor } from '../services/ftConfig';
+import type { AppLayer, Quest, User } from '../types/domain';
 
 const STATUS_MAP = {
   'Open':        { label: 'פתוח',   cls: 'badge-open' },
@@ -8,56 +9,86 @@ const STATUS_MAP = {
   'In Progress': { label: 'בביצוע', cls: 'badge-progress' },
   'Done':        { label: 'הושלם',  cls: 'badge-done' },
   'Approved':    { label: 'מאושר',  cls: 'badge-approved' },
-};
+} as const;
 
-export default function QuestItem({ quest, user, onRefresh, onShowOnMap, onLayerAdded, onOpenTable }) {
+type MessageType = 'success' | 'error' | 'warning' | 'info';
+
+interface QuestItemProps {
+  quest: Quest;
+  user: User | null;
+  onRefresh: () => Promise<void> | void;
+  onShowOnMap: (quest: Quest) => void;
+  onLayerAdded: (layer: AppLayer) => void;
+  onOpenTable?: (layers: AppLayer[]) => void;
+}
+
+export default function QuestItem({
+  quest,
+  user,
+  onRefresh,
+  onShowOnMap,
+  onLayerAdded,
+  onOpenTable,
+}: QuestItemProps) {
   const [expanded, setExpanded] = useState(false);
-  const [busy, setBusy]         = useState(false);
-  const [msg, setMsg]           = useState({ text:'', type:'info' });
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ text: string; type: MessageType }>({ text: '', type: 'info' });
   const [uploadProgress, setUploadProgress] = useState(false);
+  const clearMessageTimeout = useRef<number | null>(null);
 
-  const role      = user?.role || 'Viewer';
-  const isViewer  = role === 'Viewer';
-  const isLeader  = role === 'Team Leader';
-  const status    = STATUS_MAP[quest.status] || { label: quest.status, cls: 'badge-open' };
+  const role = user?.role || 'Viewer';
+  const isViewer = role === 'Viewer';
+  const isLeader = role === 'Team Leader';
+  const status = STATUS_MAP[quest.status as keyof typeof STATUS_MAP] || { label: quest.status, cls: 'badge-open' };
   const ftClr = ftColor(quest.ft);
 
-  const showMsg = (text, type = 'info') => {
+  useEffect(() => {
+    return () => {
+      if (clearMessageTimeout.current !== null) {
+        window.clearTimeout(clearMessageTimeout.current);
+      }
+    };
+  }, []);
+
+  const showMsg = (text: string, type: MessageType = 'info') => {
+    if (clearMessageTimeout.current !== null) {
+      window.clearTimeout(clearMessageTimeout.current);
+    }
+
     setMsg({ text, type });
-    setTimeout(() => setMsg({ text:'', type:'info' }), 4000);
+    clearMessageTimeout.current = window.setTimeout(() => {
+      setMsg({ text: '', type: 'info' });
+    }, 4000);
   };
 
-  // ── Take quest ────────────────────────────────────────
-  const handleTake = async (e) => {
+  const handleTake = async (e: MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
     setBusy(true);
     try {
-      await takeQuest(quest.id, user.display_name || user.username);
+      await takeQuest(quest.id, user?.display_name || user?.username || '');
       showMsg('✓ המשימה נלקחה בהצלחה', 'success');
-      onRefresh();
+      await onRefresh();
     } catch {
       showMsg('✗ שגיאה בלקיחת משימה', 'error');
     }
     setBusy(false);
   };
 
-  // ── Change status ─────────────────────────────────────
-  const handleStatusChange = async (e) => {
+  const handleStatusChange = async (e: ChangeEvent<HTMLSelectElement>) => {
     e.stopPropagation();
     const s = e.target.value;
     setBusy(true);
     try {
       await setQuestStatus(quest.id, s);
-      showMsg(`✓ סטטוס עודכן: ${STATUS_MAP[s]?.label}`, 'success');
-      onRefresh();
+      showMsg(`✓ סטטוס עודכן: ${STATUS_MAP[s as keyof typeof STATUS_MAP]?.label || s}`, 'success');
+      await onRefresh();
     } catch {
       showMsg('✗ שגיאה בעדכון סטטוס', 'error');
     }
     setBusy(false);
   };
 
-  // ── Upload SHP / ZIP / GeoJSON ────────────────────────
-  const handleUpload = async (e) => {
+  const handleUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     e.stopPropagation();
     const file = e.target.files?.[0];
     if (!file) return;
@@ -80,8 +111,8 @@ export default function QuestItem({ quest, user, onRefresh, onShowOnMap, onLayer
       }
 
       // Add each layer to the map
-      const mapLayers = [];
-      uploadedLayers.forEach(l => {
+      const mapLayers: AppLayer[] = [];
+      uploadedLayers.forEach((l) => {
         if (l.geojson) {
           const layerObj = {
             name: l.name || quest.title,
@@ -101,17 +132,16 @@ export default function QuestItem({ quest, user, onRefresh, onShowOnMap, onLayer
       }
 
       showMsg(`✓ ${uploadedLayers.length} שכבות נטענו למפה`, 'success');
-      onRefresh();
-    } catch (err) {
-      showMsg(`✗ שגיאת העלאה: ${err?.response?.data?.detail || err.message || 'שגיאה לא ידועה'}`, 'error');
+      await onRefresh();
+    } catch (err: any) {
+      showMsg(`✗ שגיאת העלאה: ${err?.response?.data?.detail || err?.message || 'שגיאה לא ידועה'}`, 'error');
     } finally {
       setUploadProgress(false);
       e.target.value = '';
     }
   };
 
-  // ── Check folder ──────────────────────────────────────
-  const handleCheckFolder = async (e) => {
+  const handleCheckFolder = async (e: MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
     setBusy(true);
     showMsg('⏳ סורק תיקייה...', 'info');
@@ -122,8 +152,8 @@ export default function QuestItem({ quest, user, onRefresh, onShowOnMap, onLayer
         showMsg('לא נמצאו קבצים בתיקייה', 'warning');
         return;
       }
-      const mapLayers = [];
-      layers.forEach(l => {
+      const mapLayers: AppLayer[] = [];
+      layers.forEach((l) => {
         if (l.data) {
           const layerObj = { name: l.name, data: l.data, year: quest.year, ft: quest.ft, fields: l.fields || [] };
           onLayerAdded(layerObj);
@@ -138,7 +168,7 @@ export default function QuestItem({ quest, user, onRefresh, onShowOnMap, onLayer
     setBusy(false);
   };
 
-  const msgColor = { success:'var(--green)', error:'var(--red)', warning:'var(--orange)', info:'var(--accent)' };
+  const msgColor: Record<MessageType, string> = { success:'var(--green)', error:'var(--red)', warning:'var(--orange)', info:'var(--accent)' };
 
   return (
     <div
@@ -248,7 +278,7 @@ export default function QuestItem({ quest, user, onRefresh, onShowOnMap, onLayer
   );
 }
 
-const S = {
+const S: Record<string, CSSProperties> = {
   card: {
     background: 'var(--surface2)',
     border: '1px solid var(--border)',

@@ -1,11 +1,19 @@
-import React, { useState, useMemo } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 
-export default function AttributeTable({ layers, onClose, onHighlightFeature }) {
-  const [activeLayer, setActiveLayer]   = useState(0);
-  const [sortCol, setSortCol]           = useState(null);
-  const [sortDir, setSortDir]           = useState('asc');
-  const [search, setSearch]             = useState('');
-  const [selectedRow, setSelectedRow]   = useState(null);
+import type { AppLayer } from '../types/domain';
+
+interface AttributeTableProps {
+  layers: AppLayer[];
+  onClose: () => void;
+  onHighlightFeature?: (layer: AppLayer, featureIndex: number) => void;
+}
+
+export default function AttributeTable({ layers, onClose, onHighlightFeature }: AttributeTableProps) {
+  const [activeLayer, setActiveLayer] = useState(0);
+  const [sortCol, setSortCol] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [search, setSearch] = useState('');
+  const [selectedRow, setSelectedRow] = useState<number | null>(null);
 
   const layer = layers[activeLayer];
   if (!layer) return null;
@@ -15,14 +23,14 @@ export default function AttributeTable({ layers, onClose, onHighlightFeature }) 
   // All property keys = column headers
   const columns = useMemo(() => {
     if (!features.length) return [];
-    const keys = new Set();
-    features.slice(0, 50).forEach(f => Object.keys(f.properties || {}).forEach(k => keys.add(k)));
+    const keys = new Set<string>();
+    features.slice(0, 50).forEach((feature) => Object.keys(feature.properties || {}).forEach((key) => keys.add(key)));
     return [...keys];
   }, [features]);
 
   // Filter + sort
   const rows = useMemo(() => {
-    let data = features.map((f, i) => ({ _idx: i, ...f.properties }));
+    let data = features.map((feature, index) => ({ _idx: index, ...(feature.properties || {}) }));
 
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -44,12 +52,12 @@ export default function AttributeTable({ layers, onClose, onHighlightFeature }) 
     return data;
   }, [features, columns, search, sortCol, sortDir]);
 
-  const handleSort = (col) => {
+  const handleSort = (col: string) => {
     if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
     else { setSortCol(col); setSortDir('asc'); }
   };
 
-  const handleRowClick = (row) => {
+  const handleRowClick = (row: Record<string, unknown> & { _idx: number }) => {
     setSelectedRow(row._idx);
     if (onHighlightFeature) onHighlightFeature(layer, row._idx);
   };
@@ -176,14 +184,14 @@ export default function AttributeTable({ layers, onClose, onHighlightFeature }) 
   );
 }
 
-function formatCell(val) {
+function formatCell(val: unknown) {
   if (val === null || val === undefined || val === 'None' || val === 'nan') return '—';
   const s = String(val);
   if (s.length > 60) return s.slice(0, 57) + '...';
   return s;
 }
 
-const S = {
+const S: Record<string, CSSProperties> = {
   overlay: {
     position: 'relative',
     

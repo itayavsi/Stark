@@ -1,90 +1,102 @@
-import React, { useState, useMemo } from 'react';
-import QuestItem from './QuestItem.jsx';
+import {
+  useMemo,
+  useState,
+  type CSSProperties,
+  type FormEvent,
+} from 'react';
+
+import { useAuth } from '../context/AuthContext';
 import { createQuest, setQuestStatus } from '../services/api';
 import { FT_OPTIONS, ftColor } from '../services/ftConfig';
+import type { AppLayer, FtOption, Quest } from '../types/domain';
+import {
+  ALL_QUEST_COLUMNS,
+  QUEST_VIEWS,
+  getQuestStatusLabel,
+  getQuestView,
+  sortQuests,
+  type QuestViewId,
+} from '../utils/quests';
+import { filterQuests } from '../utils/quests';
+import QuestItem from './QuestItem';
 
-// ── View tabs ─────────────────────────────────────────────────
-const VIEWS = [
-  { id: 'open',     label: 'פתוחות',   icon: '📋', statuses: ['Open', 'Taken', 'In Progress'] },
-  { id: 'done',     label: 'הסתיימו',  icon: '✅', statuses: ['Done', 'Approved'] },
-  { id: 'stopped',  label: 'הופסקו',   icon: '⏸',  statuses: ['Stopped', 'Cancelled'] },
-];
+interface QuestPanelProps {
+  quests: Quest[];
+  loading: boolean;
+  onRefresh: () => Promise<void> | void;
+  onShowOnMap: (quest: Quest) => void;
+  onLayerAdded: (layer: AppLayer) => void;
+  onOpenTable: (layers: AppLayer[]) => void;
+}
 
-const STATUS_HEB = {
-  Open: 'פתוח', Taken: 'נלקח', 'In Progress': 'בביצוע',
-  Done: 'הושלם', Approved: 'מאושר', Stopped: 'הופסק', Cancelled: 'בוטל',
-};
-
-const ALL_COLS = ['#', 'כותרת', 'FT', 'סטטוס', 'תאריך', 'משתמש', 'תיאור', 'שנה'];
-
-export default function QuestPanel({ quests, loading, onRefresh, onShowOnMap, onLayerAdded, onOpenTable }) {
-  const [view, setView]         = useState('open');
-  const [search, setSearch]     = useState('');
-  const [showNew, setShowNew]   = useState(false);
+export default function QuestPanel({
+  quests,
+  loading,
+  onRefresh,
+  onShowOnMap,
+  onLayerAdded,
+  onOpenTable,
+}: QuestPanelProps) {
+  const { user } = useAuth();
+  const [view, setView] = useState<QuestViewId>('open');
+  const [search, setSearch] = useState('');
+  const [showNew, setShowNew] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
-
-  // New quest form state
   const [newTitle, setNewTitle] = useState('');
-  const [newDesc, setNewDesc]   = useState('');
-  const [newYear, setNewYear]   = useState(2026);
-  const [newFt, setNewFt]       = useState('FT1');
+  const [newDesc, setNewDesc] = useState('');
+  const [newYear, setNewYear] = useState(2026);
+  const [newFt, setNewFt] = useState<FtOption>('FT1');
   const [creating, setCreating] = useState(false);
+  const [sortCol, setSortCol] = useState<(typeof ALL_QUEST_COLUMNS)[number] | null>(null);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
-  // Excel sort state
-  const [sortCol, setSortCol]   = useState(null);
-  const [sortDir, setSortDir]   = useState('asc');
+  const isLeader = user?.role === 'Team Leader';
+  const currentView = getQuestView(view);
+  const filtered = useMemo(() => filterQuests(quests, view, search), [quests, view, search]);
+  const sortedRows = useMemo(() => sortQuests(filtered, sortCol, sortDir), [filtered, sortCol, sortDir]);
 
-  const user     = JSON.parse(localStorage.getItem('user') || '{}');
-  const isLeader = user.role === 'Team Leader';
+  const handleSort = (col: (typeof ALL_QUEST_COLUMNS)[number]) => {
+    if (sortCol === col) {
+      setSortDir((current) => (current === 'asc' ? 'desc' : 'asc'));
+      return;
+    }
 
-  const currentView = VIEWS.find(v => v.id === view);
-
-  // Filter quests by current view tab + search
-  const filtered = useMemo(() => {
-    return quests.filter(q => {
-      const matchView   = currentView.statuses.includes(q.status);
-      const matchSearch = !search ||
-        q.title?.includes(search) ||
-        (q.description || '').includes(search) ||
-        (q.ft || '').includes(search);
-      return matchView && matchSearch;
-    });
-  }, [quests, currentView, search]);
-
-  // Sorted for Excel view
-  const sortedRows = useMemo(() => {
-    if (!sortCol) return filtered;
-    return [...filtered].sort((a, b) => {
-      const map = { '#': 'id', 'כותרת': 'title', 'FT': 'ft', 'סטטוס': 'status',
-                    'תאריך': 'date', 'משתמש': 'assigned_user', 'תיאור': 'description', 'שנה': 'year' };
-      const key = map[sortCol] || 'title';
-      const av  = String(a[key] ?? '');
-      const bv  = String(b[key] ?? '');
-      return sortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
-    });
-  }, [filtered, sortCol, sortDir]);
-
-  const handleSort = (col) => {
-    if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
-    else { setSortCol(col); setSortDir('asc'); }
+    setSortCol(col);
+    setSortDir('asc');
   };
 
-  const handleCreate = async (e) => {
-    e.preventDefault();
-    if (!newTitle.trim()) return;
+  const handleCreate = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!newTitle.trim()) {
+      return;
+    }
+
     setCreating(true);
     try {
-      await createQuest({ title: newTitle, description: newDesc, year: newYear, ft: newFt, group: 'לווינות' });
-      setNewTitle(''); setNewDesc(''); setNewYear(2026); setNewFt('FT1'); setShowNew(false);
-      onRefresh();
-    } catch { alert('שגיאה ביצירת משימה'); }
-    finally { setCreating(false); }
+      await createQuest({
+        title: newTitle,
+        description: newDesc,
+        year: newYear,
+        ft: newFt,
+        group: 'לווינות',
+      });
+      setNewTitle('');
+      setNewDesc('');
+      setNewYear(2026);
+      setNewFt('FT1');
+      setShowNew(false);
+      await onRefresh();
+    } catch {
+      alert('שגיאה ביצירת משימה');
+    } finally {
+      setCreating(false);
+    }
   };
 
   const exportCSV = () => {
-    const header = ALL_COLS.join(',');
+    const header = ALL_QUEST_COLUMNS.join(',');
     const rows   = sortedRows.map((q, i) =>
-      [i+1, q.title, q.ft, STATUS_HEB[q.status]||q.status, q.date, q.assigned_user||'', q.description||'', q.year]
+      [i + 1, q.title, q.ft, getQuestStatusLabel(q.status), q.date, q.assigned_user || '', q.description || '', q.year]
         .map(v => `"${String(v||'').replace(/"/g,'""')}"`)
         .join(',')
     ).join('\n');
@@ -109,7 +121,7 @@ export default function QuestPanel({ quests, loading, onRefresh, onShowOnMap, on
             <div style={FS.headerRight}>
               {/* View tabs inside fullscreen */}
               <div style={FS.tabs}>
-                {VIEWS.map(v => (
+                {QUEST_VIEWS.map(v => (
                   <button key={v.id}
                     style={{ ...FS.tab, ...(view === v.id ? FS.tabActive : {}) }}
                     onClick={() => setView(v.id)}
@@ -133,7 +145,7 @@ export default function QuestPanel({ quests, loading, onRefresh, onShowOnMap, on
             <table style={FS.table}>
               <thead>
                 <tr>
-                  {ALL_COLS.map(col => (
+                  {ALL_QUEST_COLUMNS.map(col => (
                     <th key={col} style={FS.th} onClick={() => handleSort(col)}>
                       {col} {sortCol === col ? (sortDir === 'asc' ? '↑' : '↓') : ''}
                     </th>
@@ -155,7 +167,7 @@ export default function QuestPanel({ quests, loading, onRefresh, onShowOnMap, on
                       </td>
                       <td style={FS.td}>
                         <span style={FS.statusBadge} data-status={q.status}>
-                          {STATUS_HEB[q.status] || q.status}
+                          {getQuestStatusLabel(q.status)}
                         </span>
                       </td>
                       <td style={FS.td}>{q.date}</td>
@@ -174,7 +186,15 @@ export default function QuestPanel({ quests, loading, onRefresh, onShowOnMap, on
                               onRefresh();
                             }}
                           >
-                            {Object.entries(STATUS_HEB).map(([k,v]) =>
+                            {Object.entries({
+                              Open: 'פתוח',
+                              Taken: 'נלקח',
+                              'In Progress': 'בביצוע',
+                              Done: 'הושלם',
+                              Approved: 'מאושר',
+                              Stopped: 'הופסק',
+                              Cancelled: 'בוטל',
+                            }).map(([k, v]) =>
                               <option key={k} value={k}>{v}</option>
                             )}
                           </select>
@@ -206,7 +226,7 @@ export default function QuestPanel({ quests, loading, onRefresh, onShowOnMap, on
 
       {/* ── View tabs ─────────────────────────────────── */}
       <div style={S.tabs}>
-        {VIEWS.map(v => {
+        {QUEST_VIEWS.map(v => {
           const cnt = quests.filter(q => v.statuses.includes(q.status)).length;
           return (
             <button
@@ -248,7 +268,7 @@ export default function QuestPanel({ quests, loading, onRefresh, onShowOnMap, on
               <select className="input" value={newYear} onChange={e => setNewYear(Number(e.target.value))} style={{ fontSize: 13, flex: 1 }}>
                 {[2026, 2025, 2024, 2023].map(y => <option key={y} value={y}>{y}</option>)}
               </select>
-              <select className="input" value={newFt} onChange={e => setNewFt(e.target.value)} style={{ fontSize: 13, flex: 1 }}>
+              <select className="input" value={newFt} onChange={e => setNewFt(e.target.value as FtOption)} style={{ fontSize: 13, flex: 1 }}>
                 {FT_OPTIONS.map(ft => <option key={ft} value={ft}>{ft}</option>)}
               </select>
               <button className="btn btn-primary" type="submit" disabled={creating || !newTitle.trim()}>
@@ -274,7 +294,10 @@ export default function QuestPanel({ quests, loading, onRefresh, onShowOnMap, on
           </div>
         ) : (
           filtered.map(q => (
-            <QuestItem key={q.id} quest={q} user={user}
+            <QuestItem
+              key={q.id}
+              quest={q}
+              user={user}
               onRefresh={onRefresh} onShowOnMap={onShowOnMap}
               onLayerAdded={onLayerAdded} onOpenTable={onOpenTable} />
           ))
@@ -291,7 +314,7 @@ export default function QuestPanel({ quests, loading, onRefresh, onShowOnMap, on
 }
 
 // ── Panel styles ──────────────────────────────────────────────
-const S = {
+const S: Record<string, CSSProperties> = {
   panel:   { display:'flex', flexDirection:'column', height:'100%', overflow:'hidden', background:'var(--surface)' },
   tabs:    { display:'flex', borderBottom:'1px solid var(--border)', flexShrink:0 },
   tab: {
@@ -321,7 +344,7 @@ const S = {
 };
 
 // ── Fullscreen / Excel styles ─────────────────────────────────
-const FS = {
+const FS: Record<string, CSSProperties> = {
   overlay: {
     position:'fixed', inset:0, zIndex:2000,
     background:'rgba(0,0,0,0.7)',

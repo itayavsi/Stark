@@ -1,14 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import { useEffect, useState, type CSSProperties, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { login } from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import { API_BASE_URL, login } from '../services/api';
+import type { User } from '../types/domain';
 
 const LOCAL_USERS = [
   { username: 'admin',   password: 'admin123', role: 'Team Leader', display_name: 'מנהל ראשי',  group: 'לווינות' },
   { username: 'user1',   password: 'pass123',  role: 'User',        display_name: 'יוסי כהן',   group: 'לווינות' },
   { username: 'viewer1', password: 'view123',  role: 'Viewer',      display_name: 'צופה ראשון', group: 'לווינות' },
-];
+] satisfies Array<User & { password: string }>;
 
-function localAuth(username, password) {
+function localAuth(username: string, password: string) {
   return LOCAL_USERS.find(u => u.username === username && u.password === password) || null;
 }
 
@@ -17,22 +19,22 @@ export default function LoginPage() {
   const [password, setPassword]   = useState('');
   const [error, setError]         = useState('');
   const [loading, setLoading]     = useState(false);
-  const [backendOk, setBackendOk] = useState(null);
+  const [backendOk, setBackendOk] = useState<boolean | null>(null);
+  const { login: authenticate } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetch('http://localhost:8000/')
+    fetch(`${API_BASE_URL}/`)
       .then(r => setBackendOk(r.ok))
       .catch(() => setBackendOk(false));
   }, []);
 
-  const saveAndGo = (user, token) => {
-    localStorage.setItem('token', token);
-    localStorage.setItem('user', JSON.stringify(user));
+  const saveAndGo = (user: User, token: string) => {
+    authenticate(user, token);
     navigate('/groups');
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError('');
 
@@ -48,7 +50,7 @@ export default function LoginPage() {
       const token = data.token || btoa(JSON.stringify({ username: data.user.username, role: data.user.role }));
       saveAndGo(data.user, token);
       return;
-    } catch (err) {
+    } catch (err: any) {
       if (err?.response?.status === 401) {
         setError('שם משתמש או סיסמה שגויים');
         setLoading(false);
@@ -67,7 +69,7 @@ export default function LoginPage() {
     setLoading(false);
   };
 
-  const quickFill = (u) => {
+  const quickFill = (u: (typeof LOCAL_USERS)[number]) => {
     setUsername(u.username);
     setPassword(u.password);
     setError('');
@@ -103,7 +105,7 @@ export default function LoginPage() {
               className="input"
               type="text"
               value={username}
-              onChange={e => setUsername(e.target.value)}
+              onChange={(e) => setUsername(e.target.value)}
               placeholder="admin"
               autoComplete="username"
               autoFocus
@@ -117,11 +119,10 @@ export default function LoginPage() {
               className="input"
               type="password"
               value={password}
-              onChange={e => setPassword(e.target.value)}
+              onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
               autoComplete="current-password"
               disabled={loading}
-              onKeyDown={e => e.key === 'Enter' && handleSubmit(e)}
             />
           </div>
 
@@ -158,7 +159,7 @@ export default function LoginPage() {
   );
 }
 
-const S = {
+const S: Record<string, CSSProperties> = {
   page: {
     minHeight: '100vh',
     display: 'flex',
