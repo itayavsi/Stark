@@ -1,45 +1,152 @@
-"""
-Storage abstraction layer.
-Uses JSON for dev. Swap these functions for SQLAlchemy/PostGIS calls to go production.
-"""
-import json
-import os
-from typing import List, Dict, Optional
+from typing import Dict, List, Optional
 
-DATA_FILE = os.path.join(os.path.dirname(__file__), "../storage/data.json")
+from services.db import get_connection
 
-def _load() -> Dict:
-    if not os.path.exists(DATA_FILE):
-        return {"users": [], "quests": []}
-    with open(DATA_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
 
-def _save(data: Dict):
-    os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+def _normalize_user(row: Dict) -> Dict:
+    return {
+        "id": str(row["id"]),
+        "username": row["username"],
+        "password": row["password"],
+        "role": row["role"],
+        "group": row["group_name"],
+        "display_name": row["display_name"],
+    }
+
+
+def _normalize_quest(row: Dict) -> Dict:
+    return {
+        "id": str(row["id"]),
+        "title": row["title"],
+        "description": row["description"],
+        "status": row["status"],
+        "date": row["date"],
+        "assigned_user": row["assigned_user"],
+        "shapefile_path": row["shapefile_path"],
+        "group": row["group_name"],
+        "year": row["year"],
+        "ft": row["ft"],
+    }
+
 
 def get_users() -> List[Dict]:
-    return _load().get("users", [])
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, username, password, role, group_name, display_name
+                FROM users
+                ORDER BY username;
+                """
+            )
+            return [_normalize_user(row) for row in cur.fetchall()]
+
 
 def save_user(user: Dict):
-    data = _load()
-    data["users"].append(user)
-    _save(data)
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO users (id, username, password, role, group_name, display_name)
+                VALUES (%(id)s, %(username)s, %(password)s, %(role)s, %(group_name)s, %(display_name)s);
+                """,
+                {
+                    "id": user["id"],
+                    "username": user["username"],
+                    "password": user["password"],
+                    "role": user["role"],
+                    "group_name": user["group"],
+                    "display_name": user["display_name"],
+                },
+            )
+
 
 def get_quests() -> List[Dict]:
-    return _load().get("quests", [])
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    id, title, description, status, date, assigned_user,
+                    shapefile_path, group_name, year, ft
+                FROM quests
+                ORDER BY date DESC, title ASC;
+                """
+            )
+            return [_normalize_quest(row) for row in cur.fetchall()]
+
 
 def save_quest(quest: Dict):
-    data = _load()
-    data["quests"].append(quest)
-    _save(data)
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO quests (
+                    id, title, description, status, date, assigned_user,
+                    shapefile_path, group_name, year, ft
+                )
+                VALUES (
+                    %(id)s, %(title)s, %(description)s, %(status)s, %(date)s, %(assigned_user)s,
+                    %(shapefile_path)s, %(group_name)s, %(year)s, %(ft)s
+                );
+                """,
+                {
+                    "id": quest["id"],
+                    "title": quest["title"],
+                    "description": quest["description"],
+                    "status": quest["status"],
+                    "date": quest["date"],
+                    "assigned_user": quest["assigned_user"],
+                    "shapefile_path": quest["shapefile_path"],
+                    "group_name": quest["group"],
+                    "year": quest["year"],
+                    "ft": quest["ft"],
+                },
+            )
+
 
 def update_quest(quest_id: str, updates: Dict) -> Optional[Dict]:
-    data = _load()
-    for q in data["quests"]:
-        if q["id"] == quest_id:
-            q.update(updates)
-            _save(data)
-            return q
-    return None
+    if not updates:
+        return None
+
+    allowed_fields = {
+        "title": "title",
+        "description": "description",
+        "status": "status",
+        "date": "date",
+        "assigned_user": "assigned_user",
+        "shapefile_path": "shapefile_path",
+        "group": "group_name",
+        "year": "year",
+        "ft": "ft",
+    }
+    assignments = []
+    params = {"quest_id": quest_id}
+
+    for key, value in updates.items():
+        column = allowed_fields.get(key)
+        if not column:
+            continue
+        assignments.append(f"{column} = %({key})s")
+        params[key] = value
+
+    if not assignments:
+        return None
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""
+                UPDATE quests
+                SET {", ".join(assignments)}
+                WHERE id = %(quest_id)s
+                RETURNING
+                    id, title, description, status, date, assigned_user,
+                    shapefile_path, group_name, year, ft;
+                """,
+                params,
+            )
+            row = cur.fetchone()
+            if row is None:
+                return None
+            return _normalize_quest(row)

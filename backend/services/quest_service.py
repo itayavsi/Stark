@@ -6,12 +6,13 @@ def get_all_quests():
     return get_quests()
 
 def create_quest(data: dict):
+    today = datetime.now().strftime("%Y-%m-%d")
     quest = {
         "id": str(uuid.uuid4()),
         "title": data.get("title", ""),
         "description": data.get("description", ""),
         "status": "Open",
-        "date": data.get("date", datetime.now().strftime("%Y-%m-%d")),
+        "date": data.get("date") or today,
         "assigned_user": data.get("assigned_user"),
         "shapefile_path": data.get("shapefile_path"),
         "group": data.get("group", "לווינות"),

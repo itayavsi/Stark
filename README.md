@@ -89,14 +89,46 @@ sources: {
 
 ---
 
-## 🗄️ Switching to PostgreSQL later
+## Neon Setup
 
-All storage is in `backend/services/storage.py`. Replace the JSON functions
-with SQLAlchemy calls to switch to PostGIS:
+This backend now reads and writes users and quests from Postgres, so you can point it at your Neon project directly.
+
+### 1. Install backend dependencies
 
 ```bash
-pip install sqlalchemy psycopg2-binary geoalchemy2
+cd backend
+pip install -r requirements.txt
 ```
+
+### 2. Add your Neon connection string
+
+Copy `backend/.env.example` to `backend/.env` and set `DATABASE_URL` to the pooled connection string from your Neon project `muddy-glitter-65270295`.
+
+```bash
+cd backend
+cp .env.example .env
+```
+
+Expected format:
+
+```bash
+DATABASE_URL=postgresql://<role>:<password>@<your-neon-endpoint-pooler>/<database>?sslmode=require
+```
+
+### 3. Start the backend
+
+```bash
+cd backend
+python app.py
+```
+
+On startup, the API creates the `users` and `quests` tables if they do not exist and seeds them from `backend/storage/data.json` when the database is empty.
+
+### Notes
+
+- Use the pooled Neon connection string for the FastAPI app.
+- Keep `sslmode=require` in the connection string.
+- If you want to run schema migrations later, use a direct connection string for migration tools and keep the pooled string for the app.
 
 ---
 
