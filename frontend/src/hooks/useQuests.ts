@@ -20,6 +20,14 @@ export function useQuests() {
 
   useEffect(() => {
     void refresh();
+
+    const intervalId = window.setInterval(() => {
+      void refresh();
+    }, 60_000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
   }, [refresh]);
 
   return {

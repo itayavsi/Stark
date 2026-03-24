@@ -31,6 +31,9 @@ export interface Quest {
   lng?: number;
   lat?: number;
   shapefile_path?: string;
+  sync_source?: string;
+  sync_name?: string;
+  external_status?: string;
 }
 
 export interface LoginResponse {

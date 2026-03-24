@@ -209,3 +209,37 @@ def save_quest_sort_order(group: str, view: str, quest_ids: List[str]) -> List[s
             )
             row = cur.fetchone()
             return [str(quest_id) for quest_id in row["order_data"]]
+
+
+def get_external_status_overrides(external_ids: List[str]) -> Dict[str, str]:
+    if not external_ids:
+        return {}
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT external_id, local_status
+                FROM external_quest_overrides
+                WHERE external_id = ANY(%(external_ids)s);
+                """,
+                {"external_ids": external_ids},
+            )
+            return {str(row["external_id"]): str(row["local_status"]) for row in cur.fetchall()}
+
+
+def save_external_status_override(external_id: str, local_status: str) -> str:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO external_quest_overrides (external_id, local_status, updated_at)
+                VALUES (%(external_id)s, %(local_status)s, NOW())
+                ON CONFLICT (external_id)
+                DO UPDATE SET local_status = EXCLUDED.local_status, updated_at = NOW()
+                RETURNING local_status;
+                """,
+                {"external_id": external_id, "local_status": local_status},
+            )
+            row = cur.fetchone()
+            return str(row["local_status"])

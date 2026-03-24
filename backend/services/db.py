@@ -92,6 +92,15 @@ def init_db() -> None:
                 );
                 """
             )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS external_quest_overrides (
+                    external_id TEXT PRIMARY KEY,
+                    local_status TEXT NOT NULL,
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+                """
+            )
 
             cur.execute("SELECT COUNT(*) AS count FROM users;")
             users_count = cur.fetchone()["count"]
