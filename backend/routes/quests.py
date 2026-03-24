@@ -1,7 +1,8 @@
 from fastapi import APIRouter, HTTPException, Body
 from services.quest_service import (
     get_all_quests, create_quest, take_quest,
-    complete_quest, update_quest_status
+    complete_quest, update_quest_status, get_saved_quest_sort,
+    save_saved_quest_sort
 )
 from models.quest import QuestCreate
 
@@ -43,3 +44,17 @@ def set_status(quest_id: str, status: str = Body(..., embed=True)):
     if not result:
         raise HTTPException(status_code=404, detail="Quest not found")
     return result
+
+
+@router.get("/sort-order")
+def get_sort_order(group: str, view: str):
+    return {"group": group, "view": view, "quest_ids": get_saved_quest_sort(group, view)}
+
+
+@router.post("/sort-order")
+def save_sort_order(
+    group: str = Body(..., embed=True),
+    view: str = Body(..., embed=True),
+    quest_ids: list[str] = Body(..., embed=True),
+):
+    return {"group": group, "view": view, "quest_ids": save_saved_quest_sort(group, view, quest_ids)}

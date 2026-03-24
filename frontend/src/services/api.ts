@@ -6,6 +6,8 @@ import type {
   LayerDataResponse,
   LoginResponse,
   Quest,
+  QuestSortOrderResponse,
+  ResolveShpFolderResponse,
   UploadShapefileResponse,
   User,
 } from '../types/domain';
@@ -36,27 +38,42 @@ export const getQuests = (params: Record<string, string | number> = {}) =>
 export const createQuest = (data: CreateQuestInput) =>
   api.post<Quest>('/quests/', data).then((response) => response.data);
 
-export const takeQuest = (questId: number, username: string) =>
+export const takeQuest = (questId: string, username: string) =>
   api.post('/quests/take', { quest_id: questId, username }).then((response) => response.data);
 
-export const completeQuest = (questId: number) =>
+export const completeQuest = (questId: string) =>
   api.post('/quests/complete', { quest_id: questId }).then((response) => response.data);
 
-export const setQuestStatus = (questId: number, status: string) =>
+export const setQuestStatus = (questId: string, status: string) =>
   api.patch(`/quests/${questId}/status`, { status }).then((response) => response.data);
 
-export const uploadShapefile = (questId: number, file: File) => {
+export const uploadShapefile = (questId: string, file: File) => {
   const fd = new FormData();
   fd.append('quest_id', String(questId));
   fd.append('file', file);
   return api.post<UploadShapefileResponse>('/shapefiles/upload', fd).then((response) => response.data);
 };
 
-export const getLayerData = (questId: number) =>
+export const getLayerData = (questId: string) =>
   api.get<LayerDataResponse>(`/shapefiles/layer-data/${questId}`).then((response) => response.data);
 
 export const checkFolder = (path: string) =>
   api.get('/shapefiles/check-folder', { params: { path } }).then((response) => response.data);
+
+export const resolveShpFolder = (path: string) =>
+  api
+    .get<ResolveShpFolderResponse>('/shapefiles/resolve-shp-folder', { params: { path } })
+    .then((response) => response.data);
+
+export const getQuestSortOrder = (group: string, view: string) =>
+  api
+    .get<QuestSortOrderResponse>('/quests/sort-order', { params: { group, view } })
+    .then((response) => response.data);
+
+export const saveQuestSortOrder = (group: string, view: string, questIds: string[]) =>
+  api
+    .post<QuestSortOrderResponse>('/quests/sort-order', { group, view, quest_ids: questIds })
+    .then((response) => response.data);
 
 export const getUsers = () =>
   api.get<User[]>('/users/').then((response) => response.data);

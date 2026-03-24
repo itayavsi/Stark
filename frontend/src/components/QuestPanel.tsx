@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useMemo,
   useState,
   type CSSProperties,
@@ -6,15 +7,19 @@ import {
 } from 'react';
 
 import { useAuth } from '../context/AuthContext';
-import { createQuest, setQuestStatus } from '../services/api';
+import { createQuest, getQuestSortOrder, resolveShpFolder, saveQuestSortOrder, setQuestStatus } from '../services/api';
 import { FT_OPTIONS, ftColor } from '../services/ftConfig';
 import type { AppLayer, FtOption, Quest } from '../types/domain';
 import {
   ALL_QUEST_COLUMNS,
+  QUEST_SORT_OPTIONS,
   QUEST_VIEWS,
   getQuestStatusLabel,
   getQuestView,
+  reorderQuestList,
+  sortQuestsByOption,
   sortQuests,
+  type QuestSortOptionId,
   type QuestViewId,
 } from '../utils/quests';
 import { filterQuests } from '../utils/quests';
@@ -24,7 +29,7 @@ interface QuestPanelProps {
   quests: Quest[];
   loading: boolean;
   onRefresh: () => Promise<void> | void;
-  onShowOnMap: (quest: Quest) => void;
+  onShowOnMap: (quest: Quest) => Promise<void> | void;
   onLayerAdded: (layer: AppLayer) => void;
   onOpenTable: (layers: AppLayer[]) => void;
 }
@@ -46,14 +51,70 @@ export default function QuestPanel({
   const [newDesc, setNewDesc] = useState('');
   const [newYear, setNewYear] = useState(2026);
   const [newFt, setNewFt] = useState<FtOption>('FT1');
+  const [newModelPath, setNewModelPath] = useState('');
+  const [resolvedShapefilePath, setResolvedShapefilePath] = useState('');
+  const [resolvingPath, setResolvingPath] = useState(false);
   const [creating, setCreating] = useState(false);
   const [sortCol, setSortCol] = useState<(typeof ALL_QUEST_COLUMNS)[number] | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [listSort, setListSort] = useState<QuestSortOptionId>('manual');
+  const [listSortDir, setListSortDir] = useState<'asc' | 'desc'>('asc');
+  const [manualOrderByView, setManualOrderByView] = useState<Record<QuestViewId, string[]>>({
+    open: [],
+    done: [],
+    stopped: [],
+  });
+  const [draggedQuestId, setDraggedQuestId] = useState<string | null>(null);
+  const [savingSort, setSavingSort] = useState(false);
+  const [sortStatus, setSortStatus] = useState('');
 
   const isLeader = user?.role === 'Team Leader';
   const currentView = getQuestView(view);
+  const currentGroup = user?.group || 'לווינות';
   const filtered = useMemo(() => filterQuests(quests, view, search), [quests, view, search]);
   const sortedRows = useMemo(() => sortQuests(filtered, sortCol, sortDir), [filtered, sortCol, sortDir]);
+  const orderedFiltered = useMemo(() => {
+    const manualOrder = manualOrderByView[view] || [];
+    const questMap = new Map(filtered.map((quest) => [quest.id, quest]));
+    const manualQuests = manualOrder
+      .map((questId) => questMap.get(questId))
+      .filter((quest): quest is Quest => Boolean(quest));
+    const missingQuests = filtered.filter((quest) => !manualOrder.includes(quest.id));
+    return [...manualQuests, ...missingQuests];
+  }, [filtered, manualOrderByView, view]);
+  const displayedQuests = useMemo(
+    () => sortQuestsByOption(orderedFiltered, listSort, listSortDir),
+    [orderedFiltered, listSort, listSortDir]
+  );
+
+  const manualSortDisabled = listSort !== 'manual';
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadSavedSort() {
+      try {
+        const response = await getQuestSortOrder(currentGroup, view);
+        if (cancelled) {
+          return;
+        }
+        setManualOrderByView((current) => ({
+          ...current,
+          [view]: response.quest_ids,
+        }));
+      } catch {
+        if (!cancelled) {
+          setSortStatus('');
+        }
+      }
+    }
+
+    void loadSavedSort();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentGroup, view]);
 
   const handleSort = (col: (typeof ALL_QUEST_COLUMNS)[number]) => {
     if (sortCol === col) {
@@ -65,6 +126,55 @@ export default function QuestPanel({
     setSortDir('asc');
   };
 
+  const handleListSortChange = (nextSortId: QuestSortOptionId) => {
+    setListSort(nextSortId);
+    const nextOption = QUEST_SORT_OPTIONS.find((option) => option.id === nextSortId);
+    setListSortDir(nextOption?.defaultDirection ?? 'asc');
+  };
+
+  const handleQuestDrop = (targetQuestId: string) => {
+    if (draggedQuestId === null || draggedQuestId === targetQuestId || manualSortDisabled) {
+      setDraggedQuestId(null);
+      return;
+    }
+
+    setManualOrderByView((current) => {
+      const currentIds = displayedQuests.map((quest) => quest.id);
+      const currentOrder = current[view]?.length ? current[view] : currentIds;
+      const currentQuests = currentOrder
+        .map((questId) => displayedQuests.find((quest) => quest.id === questId))
+        .filter((quest): quest is Quest => Boolean(quest));
+      const reordered = reorderQuestList(currentQuests, draggedQuestId, targetQuestId);
+
+      return {
+        ...current,
+        [view]: reordered.map((quest) => quest.id),
+      };
+    });
+    setDraggedQuestId(null);
+    setSortStatus('יש שינויים שלא נשמרו');
+  };
+
+  const handleSaveSort = async () => {
+    if (!isLeader) {
+      return;
+    }
+
+    setSavingSort(true);
+    try {
+      const response = await saveQuestSortOrder(currentGroup, view, displayedQuests.map((quest) => quest.id));
+      setManualOrderByView((current) => ({
+        ...current,
+        [view]: response.quest_ids,
+      }));
+      setSortStatus('המיון נשמר');
+    } catch {
+      setSortStatus('שגיאה בשמירת המיון');
+    } finally {
+      setSavingSort(false);
+    }
+  };
+
   const handleCreate = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!newTitle.trim()) {
@@ -73,23 +183,51 @@ export default function QuestPanel({
 
     setCreating(true);
     try {
+      let shapefilePath = resolvedShapefilePath;
+
+      if (newModelPath.trim() && !shapefilePath) {
+        const resolved = await resolveShpFolder(newModelPath.trim());
+        shapefilePath = resolved.shapefile_path;
+        setResolvedShapefilePath(resolved.shapefile_path);
+      }
+
       await createQuest({
         title: newTitle,
         description: newDesc,
         year: newYear,
         ft: newFt,
         group: 'לווינות',
+        shapefile_path: shapefilePath || undefined,
       });
       setNewTitle('');
       setNewDesc('');
       setNewYear(2026);
       setNewFt('FT1');
+      setNewModelPath('');
+      setResolvedShapefilePath('');
       setShowNew(false);
       await onRefresh();
     } catch {
       alert('שגיאה ביצירת משימה');
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleResolveShpPath = async () => {
+    if (!newModelPath.trim()) {
+      return;
+    }
+
+    setResolvingPath(true);
+    try {
+      const resolved = await resolveShpFolder(newModelPath.trim());
+      setResolvedShapefilePath(resolved.shapefile_path);
+    } catch {
+      setResolvedShapefilePath('');
+      alert("לא נמצאה תיקיית 'shp' או קובץ 'shp.zip' בנתיב שסופק");
+    } finally {
+      setResolvingPath(false);
     }
   };
 
@@ -157,7 +295,11 @@ export default function QuestPanel({
                 {sortedRows.map((q, i) => {
                   const clr = ftColor(q.ft);
                   return (
-                    <tr key={q.id} style={{ ...FS.tr, borderRight: `3px solid ${clr}` }}>
+                    <tr
+                      key={q.id}
+                      style={{ ...FS.tr, ...FS.trClickable, borderRight: `3px solid ${clr}` }}
+                      onClick={() => void onShowOnMap(q)}
+                    >
                       <td style={FS.td}>{i + 1}</td>
                       <td style={{ ...FS.td, fontWeight: 600, maxWidth: 220 }}>{q.title}</td>
                       <td style={FS.td}>
@@ -181,6 +323,7 @@ export default function QuestPanel({
                           <select
                             style={FS.select}
                             value={q.status}
+                            onClick={(e) => e.stopPropagation()}
                             onChange={async (e) => {
                               await setQuestStatus(q.id, e.target.value);
                               onRefresh();
@@ -265,6 +408,31 @@ export default function QuestPanel({
             <textarea className="input" placeholder="תיאור (אופציונלי)" value={newDesc}
               onChange={e => setNewDesc(e.target.value)} rows={2} style={{ resize: 'vertical', fontSize: 13 }} />
             <div style={{ display: 'flex', gap: 6 }}>
+              <input
+                className="input"
+                placeholder="נתיב מודל / תיקייה"
+                value={newModelPath}
+                onChange={e => {
+                  setNewModelPath(e.target.value);
+                  setResolvedShapefilePath('');
+                }}
+                style={{ fontSize: 13, flex: 1 }}
+              />
+              <button
+                className="btn btn-ghost"
+                type="button"
+                onClick={handleResolveShpPath}
+                disabled={resolvingPath || !newModelPath.trim()}
+              >
+                {resolvingPath ? 'מחפש...' : 'בדוק shp'}
+              </button>
+            </div>
+            {resolvedShapefilePath && (
+              <div style={{ fontSize: 12, color: 'var(--text2)' }}>
+                נתיב shp: {resolvedShapefilePath}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 6 }}>
               <select className="input" value={newYear} onChange={e => setNewYear(Number(e.target.value))} style={{ fontSize: 13, flex: 1 }}>
                 {[2026, 2025, 2024, 2023].map(y => <option key={y} value={y}>{y}</option>)}
               </select>
@@ -281,6 +449,45 @@ export default function QuestPanel({
         {/* Search */}
         <input className="input" placeholder="🔍 חיפוש..." value={search}
           onChange={e => setSearch(e.target.value)} style={{ fontSize: 13 }} />
+        <div style={S.sortRow}>
+          <select
+            className="input"
+            value={listSort}
+            onChange={(e) => handleListSortChange(e.target.value as QuestSortOptionId)}
+            style={{ fontSize: 13, flex: 1 }}
+          >
+            {QUEST_SORT_OPTIONS.map((option) => (
+              <option key={option.id} value={option.id}>
+                מיין לפי {option.label}
+              </option>
+            ))}
+          </select>
+          <button
+            className="btn btn-ghost btn-sm"
+            type="button"
+            onClick={() => setListSortDir((current) => (current === 'asc' ? 'desc' : 'asc'))}
+            disabled={listSort === 'manual'}
+            title={listSortDir === 'asc' ? 'סדר עולה' : 'סדר יורד'}
+          >
+            {listSortDir === 'asc' ? '↑' : '↓'}
+          </button>
+          {isLeader && listSort === 'manual' && (
+            <button
+              className="btn btn-primary btn-sm"
+              type="button"
+              onClick={() => void handleSaveSort()}
+              disabled={savingSort || displayedQuests.length === 0}
+            >
+              {savingSort ? 'שומר...' : 'שמור מיון'}
+            </button>
+          )}
+        </div>
+        {listSort === 'manual' && (
+          <div style={S.sortHint}>
+            גרור משימות ברשימה כדי לשנות סדר ידני
+            {sortStatus ? ` • ${sortStatus}` : ''}
+          </div>
+        )}
       </div>
 
       {/* ── Quest list ────────────────────────────────── */}
@@ -293,13 +500,30 @@ export default function QuestPanel({
             <div>אין משימות ב{currentView.label}</div>
           </div>
         ) : (
-          filtered.map(q => (
-            <QuestItem
+          displayedQuests.map(q => (
+            <div
               key={q.id}
-              quest={q}
-              user={user}
-              onRefresh={onRefresh} onShowOnMap={onShowOnMap}
-              onLayerAdded={onLayerAdded} onOpenTable={onOpenTable} />
+              draggable={!manualSortDisabled}
+              onDragStart={() => setDraggedQuestId(q.id)}
+              onDragOver={(event) => {
+                if (!manualSortDisabled) {
+                  event.preventDefault();
+                }
+              }}
+              onDrop={() => handleQuestDrop(q.id)}
+              onDragEnd={() => setDraggedQuestId(null)}
+              style={{
+                ...S.dragItem,
+                ...(draggedQuestId === q.id ? S.dragItemActive : {}),
+                ...(manualSortDisabled ? S.dragItemDisabled : {}),
+              }}
+            >
+              <QuestItem
+                quest={q}
+                user={user}
+                onRefresh={onRefresh} onShowOnMap={onShowOnMap}
+                onLayerAdded={onLayerAdded} onOpenTable={onOpenTable} />
+            </div>
           ))
         )}
       </div>
@@ -336,7 +560,12 @@ const S: Record<string, CSSProperties> = {
   title:   { fontSize:13, fontWeight:700, color:'var(--text)' },
   countBadge: { background:'rgba(79,127,255,0.15)', color:'var(--accent)', borderRadius:20, fontSize:11, fontWeight:700, padding:'1px 8px' },
   newForm: { display:'flex', flexDirection:'column', gap:6, background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:10 },
+  sortRow: { display:'flex', gap:6, alignItems:'center' },
+  sortHint: { fontSize:11, color:'var(--text3)' },
   list:    { flex:1, overflowY:'auto', overflowX:'hidden', padding:'8px', display:'flex', flexDirection:'column', gap:6, scrollbarWidth:'thin', scrollbarColor:'var(--border2) transparent' },
+  dragItem: { borderRadius: 12 },
+  dragItemActive: { opacity: 0.45 },
+  dragItemDisabled: { cursor: 'default' },
   center:  { display:'flex', justifyContent:'center', padding:40 },
   empty:   { textAlign:'center', color:'var(--text3)', fontSize:13, padding:'40px 0' },
   footer:  { flexShrink:0, padding:'7px 12px', borderTop:'1px solid var(--border)', display:'flex', justifyContent:'center' },
@@ -393,6 +622,9 @@ const FS: Record<string, CSSProperties> = {
   tr: {
     borderBottom:'1px solid rgba(255,255,255,0.04)',
     cursor:'default', transition:'background 0.1s',
+  },
+  trClickable: {
+    cursor: 'pointer',
   },
   td: {
     padding:'7px 12px', borderLeft:'1px solid var(--border)',

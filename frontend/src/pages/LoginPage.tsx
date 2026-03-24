@@ -155,6 +155,7 @@ export default function LoginPage() {
         </div>
 
       </div>
+      <div style={S.credit}>© Itay Avsiyvich</div>
     </div>
   );
 }
@@ -224,4 +225,18 @@ const S: Record<string, CSSProperties> = {
   },
   quickRole: { fontSize: 12, color: 'var(--text2)' },
   quickCode: { fontSize: 11, color: 'var(--accent)', background: 'rgba(79,127,255,0.1)', padding: '2px 8px', borderRadius: 4 },
+  credit: {
+    position: 'fixed',
+    left: 14,
+    bottom: 10,
+    zIndex: 50,
+    fontSize: 11,
+    color: 'var(--text3)',
+    background: 'rgba(8,17,30,0.72)',
+    border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: 999,
+    padding: '4px 10px',
+    backdropFilter: 'blur(6px)',
+    pointerEvents: 'none',
+  },
 };

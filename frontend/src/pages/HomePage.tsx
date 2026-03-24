@@ -5,8 +5,9 @@ import MapView from '../components/MapView';
 import Navbar from '../components/Navbar';
 import QuestPanel from '../components/QuestPanel';
 import { useQuests } from '../hooks/useQuests';
-import { getFeaturePoint } from '../utils/geo';
-import type { AppLayer, LngLatPoint, Quest } from '../types/domain';
+import { getLayerData } from '../services/api';
+import { getFeaturePoint, getLayersBounds } from '../utils/geo';
+import type { AppLayer, LngLatPoint, MapBounds, Quest } from '../types/domain';
 
 const MIN_WIDTH     = 220;
 const MAX_WIDTH     = 600;
@@ -16,6 +17,7 @@ export default function HomePage() {
   const { quests, loading, refresh } = useQuests();
   const [panelOpen, setPanelOpen] = useState(true);
   const [focusCoords, setFocusCoords] = useState<LngLatPoint | null>(null);
+  const [focusBounds, setFocusBounds] = useState<MapBounds | null>(null);
   const [pendingLayers, setPendingLayers] = useState<AppLayer[]>([]);
   const [tableLayers, setTableLayers] = useState<AppLayer[]>([]);
   const [tableOpen, setTableOpen] = useState(false);
@@ -38,6 +40,40 @@ export default function HomePage() {
     setTableOpen(true);
   }, []);
 
+  const handleShowQuestOnMap = useCallback(async (quest: Quest) => {
+    try {
+      const response = await getLayerData(quest.id);
+      const mapLayers = (response.layers || [])
+        .filter((layer) => Boolean(layer.data || layer.geojson))
+        .map<AppLayer>((layer, index) => ({
+          id: `${quest.id}-${layer.name || index}`,
+          name: `${quest.title} / ${layer.name || `Layer ${index + 1}`}`,
+          data: layer.data || layer.geojson,
+          geojson: layer.geojson,
+          fields: layer.fields || [],
+          type: layer.type,
+          year: quest.year,
+          ft: quest.ft,
+        }));
+
+      if (mapLayers.length > 0) {
+        setPendingLayers(mapLayers);
+        setTableLayers(mapLayers);
+        setTableOpen(true);
+        setFocusCoords(null);
+        setFocusBounds(getLayersBounds(mapLayers));
+        return;
+      }
+    } catch {
+      // Fall back to quest coordinates when no layer data is available.
+    }
+
+    if (typeof quest.lng === 'number' && typeof quest.lat === 'number') {
+      setFocusBounds(null);
+      setFocusCoords({ lng: quest.lng, lat: quest.lat });
+    }
+  }, []);
+
   const handleLayersConsumed = useCallback(() => {
     setPendingLayers([]);
   }, []);
@@ -49,6 +85,54 @@ export default function HomePage() {
       setFocusCoords(point);
     }
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadOpenQuestLayers() {
+      const openQuests = quests.filter((quest) => quest.status === 'Open');
+      if (openQuests.length === 0) {
+        if (!cancelled) {
+          setTableLayers([]);
+          setTableOpen(false);
+        }
+        return;
+      }
+
+      const results = await Promise.allSettled(
+        openQuests.map(async (quest) => {
+          const response = await getLayerData(quest.id);
+          const layers = (response.layers || [])
+            .filter((layer) => Boolean(layer.data || layer.geojson))
+            .map<AppLayer>((layer, index) => ({
+              id: `${quest.id}-${layer.name || index}`,
+              name: `${quest.title} / ${layer.name || `Layer ${index + 1}`}`,
+              data: layer.data || layer.geojson,
+              geojson: layer.geojson,
+              fields: layer.fields || [],
+              type: layer.type,
+              year: quest.year,
+              ft: quest.ft,
+            }));
+          return layers;
+        }),
+      );
+
+      if (cancelled) {
+        return;
+      }
+
+      const nextLayers = results.flatMap((result) => result.status === 'fulfilled' ? result.value : []);
+      setTableLayers(nextLayers);
+      setTableOpen(nextLayers.length > 0);
+    }
+
+    void loadOpenQuestLayers();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [quests]);
 
   const onMouseDown = useCallback((e: MouseEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -111,6 +195,7 @@ export default function HomePage() {
         <div style={S.mapArea}>
           <MapView
             focusCoords={focusCoords}
+            focusBounds={focusBounds}
             layers={pendingLayers}
             onLayersChange={handleLayersConsumed}
           />
@@ -161,11 +246,7 @@ export default function HomePage() {
                 quests={quests}
                 loading={loading}
                 onRefresh={refresh}
-                onShowOnMap={(quest: Quest) => {
-                  if (typeof quest.lng === 'number' && typeof quest.lat === 'number') {
-                    setFocusCoords({ lng: quest.lng, lat: quest.lat });
-                  }
-                }}
+                onShowOnMap={handleShowQuestOnMap}
                 onLayerAdded={handleLayerAdded}
                 onOpenTable={handleOpenTable}
               />
@@ -175,6 +256,7 @@ export default function HomePage() {
         )}
 
       </div>
+      <div style={S.credit}>© Itay Avsiyvich</div>
     </div>
   );
 }
@@ -271,5 +353,19 @@ const S: Record<string, CSSProperties> = {
     overflow: 'hidden',
     display: 'flex',
     flexDirection: 'column',
+  },
+  credit: {
+    position: 'fixed',
+    left: 14,
+    bottom: 10,
+    zIndex: 50,
+    fontSize: 11,
+    color: 'var(--text3)',
+    background: 'rgba(8,17,30,0.72)',
+    border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: 999,
+    padding: '4px 10px',
+    backdropFilter: 'blur(6px)',
+    pointerEvents: 'none',
   },
 };

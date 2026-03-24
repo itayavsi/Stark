@@ -1,4 +1,4 @@
-import os, json
+import os, json, tempfile, zipfile
 from typing import List, Dict
 
 COLOR_RULES = {2026:"#22c55e", 2025:"#3b82f6", 2024:"#ef4444", 2023:"#f97316"}
@@ -83,6 +83,64 @@ def load_shapefiles_from_folder(folder: str) -> List[Dict]:
                 except Exception as e:
                     layers.append({"name": fname, "type":"shapefile", "error": str(e)})
     return layers
+
+
+def load_layers_from_path(path: str) -> List[Dict]:
+    if not os.path.exists(path):
+        return []
+
+    if os.path.isdir(path):
+        return load_shapefiles_from_folder(path)
+
+    if path.lower().endswith(".zip"):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            try:
+                with zipfile.ZipFile(path, "r") as archive:
+                    archive.extractall(temp_dir)
+            except Exception as exc:
+                return [{"name": os.path.basename(path), "type": "zip", "error": f"Failed to extract zip: {exc}"}]
+            return load_shapefiles_from_folder(temp_dir)
+
+    if path.lower().endswith(".shp"):
+        try:
+            geojson = shapefile_to_geojson(path)
+            fields = list(geojson["features"][0]["properties"].keys()) if geojson.get("features") else []
+            return [{"name": os.path.basename(path).replace(".shp", ""), "type": "shapefile", "data": geojson, "fields": fields}]
+        except Exception as exc:
+            return [{"name": os.path.basename(path), "type": "shapefile", "error": str(exc)}]
+
+    if path.lower().endswith(".geojson") or path.lower().endswith(".json"):
+        try:
+            with open(path, "r", encoding="utf-8") as file:
+                geojson = json.load(file)
+            fields = list(geojson["features"][0]["properties"].keys()) if geojson.get("features") else []
+            return [{"name": os.path.basename(path).replace(".geojson", "").replace(".json", ""), "type": "geojson", "data": geojson, "fields": fields}]
+        except Exception as exc:
+            return [{"name": os.path.basename(path), "type": "geojson", "error": str(exc)}]
+
+    return []
+
+
+def find_shp_resource(root_path: str) -> str | None:
+    if not os.path.exists(root_path):
+        return None
+
+    if os.path.isfile(root_path):
+        filename = os.path.basename(root_path).lower()
+        if filename == "shp.zip":
+            return root_path
+        return None
+
+    for current_root, dirs, files in os.walk(root_path):
+        for directory in dirs:
+            if directory.lower() == "shp":
+                return os.path.join(current_root, directory)
+
+        for filename in files:
+            if filename.lower() == "shp.zip":
+                return os.path.join(current_root, filename)
+
+    return None
 
 def get_color_by_year(year: int) -> str:
     return COLOR_RULES.get(year, "#6b7280")

@@ -1,7 +1,8 @@
 import os, json, zipfile, tempfile, shutil
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from fastapi.responses import JSONResponse
-from services.map_service import shapefile_to_geojson, load_shapefiles_from_folder
+from services.map_service import find_shp_resource, shapefile_to_geojson, load_layers_from_path, load_shapefiles_from_folder
+from services.quest_service import get_quest
 
 router = APIRouter()
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "../storage/uploaded_shapes")
@@ -76,12 +77,29 @@ async def upload_shapefile(quest_id: str = Form(...), file: UploadFile = File(..
 
 @router.get("/layer-data/{quest_id}")
 def get_layer_data(quest_id: str):
-    folder = os.path.join(UPLOAD_DIR, quest_id)
-    if not os.path.exists(folder):
-        folder = f"/shared/quests/{quest_id}"
-    if not os.path.exists(folder):
-        raise HTTPException(status_code=404, detail="No shapefile folder found")
-    layers = load_shapefiles_from_folder(folder)
+    quest = get_quest(quest_id)
+    candidate_paths = []
+    if quest and quest.get("shapefile_path"):
+        candidate_paths.append(quest["shapefile_path"])
+
+    candidate_paths.extend([
+        os.path.join(UPLOAD_DIR, quest_id),
+        f"/shared/quests/{quest_id}",
+    ])
+
+    layers = []
+    resolved_path = None
+    for candidate in candidate_paths:
+        if not candidate or not os.path.exists(candidate):
+            continue
+        resolved_path = candidate
+        layers = load_layers_from_path(candidate)
+        if layers:
+            break
+
+    if not resolved_path:
+        raise HTTPException(status_code=404, detail="No shapefile path found for quest")
+
     return {"layers": layers}
 
 @router.get("/check-folder")
@@ -90,3 +108,15 @@ def check_folder(path: str):
         raise HTTPException(status_code=404, detail=f"Folder not found: {path}")
     layers = load_shapefiles_from_folder(path)
     return {"path": path, "layers": layers, "count": len(layers)}
+
+
+@router.get("/resolve-shp-folder")
+def resolve_shp_folder(path: str):
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail=f"Folder not found: {path}")
+
+    shp_resource = find_shp_resource(path)
+    if not shp_resource:
+        raise HTTPException(status_code=404, detail="No folder named 'shp' or file named 'shp.zip' was found in the provided path")
+
+    return {"path": path, "shapefile_path": shp_resource}

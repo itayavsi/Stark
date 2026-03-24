@@ -38,6 +38,42 @@ const SORT_KEY_BY_COLUMN: Record<(typeof ALL_QUEST_COLUMNS)[number], keyof Quest
   'שנה': 'year',
 };
 
+export interface QuestSortOption {
+  id: 'manual' | 'ft' | 'date' | 'assigned_user';
+  label: string;
+  getValue: (quest: Quest) => string | number;
+  defaultDirection: 'asc' | 'desc';
+}
+
+export const QUEST_SORT_OPTIONS: readonly QuestSortOption[] = [
+  {
+    id: 'manual',
+    label: 'ידני',
+    getValue: () => '',
+    defaultDirection: 'asc',
+  },
+  {
+    id: 'ft',
+    label: 'FT',
+    getValue: (quest) => String(quest.ft ?? ''),
+    defaultDirection: 'asc',
+  },
+  {
+    id: 'date',
+    label: 'תאריך',
+    getValue: (quest) => String(quest.date ?? ''),
+    defaultDirection: 'desc',
+  },
+  {
+    id: 'assigned_user',
+    label: 'משתמש',
+    getValue: (quest) => String(quest.assigned_user ?? ''),
+    defaultDirection: 'asc',
+  },
+] as const;
+
+export type QuestSortOptionId = (typeof QUEST_SORT_OPTIONS)[number]['id'];
+
 export function getQuestView(viewId: QuestViewId) {
   return QUEST_VIEWS.find((view) => view.id === viewId) ?? QUEST_VIEWS[0];
 }
@@ -85,4 +121,46 @@ export function sortQuests(
       ? leftValue.localeCompare(rightValue)
       : rightValue.localeCompare(leftValue);
   });
+}
+
+export function sortQuestsByOption(
+  quests: Quest[],
+  sortId: QuestSortOptionId,
+  sortDirection: 'asc' | 'desc'
+): Quest[] {
+  if (sortId === 'manual') {
+    return quests;
+  }
+
+  const option = QUEST_SORT_OPTIONS.find((entry) => entry.id === sortId);
+  if (!option) {
+    return quests;
+  }
+
+  return [...quests].sort((left, right) => {
+    const leftValue = option.getValue(left);
+    const rightValue = option.getValue(right);
+
+    if (typeof leftValue === 'number' && typeof rightValue === 'number') {
+      return sortDirection === 'asc' ? leftValue - rightValue : rightValue - leftValue;
+    }
+
+    return sortDirection === 'asc'
+      ? String(leftValue).localeCompare(String(rightValue))
+      : String(rightValue).localeCompare(String(leftValue));
+  });
+}
+
+export function reorderQuestList(quests: Quest[], activeQuestId: string, overQuestId: string): Quest[] {
+  const currentIndex = quests.findIndex((quest) => quest.id === activeQuestId);
+  const nextIndex = quests.findIndex((quest) => quest.id === overQuestId);
+
+  if (currentIndex === -1 || nextIndex === -1 || currentIndex === nextIndex) {
+    return quests;
+  }
+
+  const reordered = [...quests];
+  const [moved] = reordered.splice(currentIndex, 1);
+  reordered.splice(nextIndex, 0, moved);
+  return reordered;
 }

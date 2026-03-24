@@ -4,7 +4,8 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import FALLBACK_WORLD from '../services/worldMap';
 
 import { FT_COLORS, ftColor } from '../services/ftConfig';
-import type { AppLayer, GeoFeatureCollection, LngLatPoint } from '../types/domain';
+import { formatAllCoordinateTypes, formatD, formatDD, formatDMS, formatUTM } from '../utils/geo';
+import type { AppLayer, GeoFeatureCollection, LngLatPoint, MapBounds } from '../types/domain';
 
 // Continent fill colors
 const CONTINENT_FILL = [
@@ -84,6 +85,7 @@ const LABELS = [
 
 interface MapViewProps {
   focusCoords: LngLatPoint | null;
+  focusBounds: MapBounds | null;
   layers: AppLayer[];
   onLayersChange?: () => void;
 }
@@ -99,7 +101,7 @@ interface LayerState {
 
 let layerCounter = 0;
 
-export default function MapView({ focusCoords, layers, onLayersChange }: MapViewProps) {
+export default function MapView({ focusCoords, focusBounds, layers, onLayersChange }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
@@ -108,6 +110,30 @@ export default function MapView({ focusCoords, layers, onLayersChange }: MapView
   const [showPanel, setShowPanel] = useState(false);
   const [mapSrc, setMapSrc] = useState('...');
   const [tooltip, setTooltip] = useState<{ name: string; continent: string; x: number; y: number } | null>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    point: LngLatPoint;
+    copied: string | null;
+  } | null>(null);
+
+  const copyText = useCallback(async (label: string, value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setContextMenu((current) => current ? { ...current, copied: label } : current);
+    } catch {
+      const textArea = document.createElement('textarea');
+      textArea.value = value;
+      textArea.style.position = 'fixed';
+      textArea.style.opacity = '0';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      setContextMenu((current) => current ? { ...current, copied: label } : current);
+    }
+  }, []);
 
   // ── Render HTML country labels ─────────────────────────────
   const renderLabels = useCallback((map: maplibregl.Map) => {
@@ -188,9 +214,20 @@ export default function MapView({ focusCoords, layers, onLayersChange }: MapView
           if (hovId !== null) { map.setFeatureState({ source: 'world', id: hovId }, { hover: false }); hovId = null; }
           setTooltip(null);
         });
+
+        map.on('contextmenu', (e) => {
+          e.originalEvent.preventDefault();
+          setContextMenu({
+            x: e.point.x,
+            y: e.point.y,
+            point: { lng: e.lngLat.lng, lat: e.lngLat.lat },
+            copied: null,
+          });
+        });
       });
 
       map.on('zoomend', () => renderLabels(map));
+      map.on('movestart', () => setContextMenu(null));
     }
 
     initMap();
@@ -205,6 +242,38 @@ export default function MapView({ focusCoords, layers, onLayersChange }: MapView
     if (focusCoords && mapRef.current)
       mapRef.current.flyTo({ center: [focusCoords.lng, focusCoords.lat], zoom: 10, duration: 1200 });
   }, [focusCoords]);
+
+  useEffect(() => {
+    if (!focusBounds || !mapRef.current) {
+      return;
+    }
+
+    mapRef.current.fitBounds(focusBounds, {
+      padding: 48,
+      duration: 1200,
+      maxZoom: 15,
+    });
+  }, [focusBounds]);
+
+  useEffect(() => {
+    if (!contextMenu) {
+      return;
+    }
+
+    const closeMenu = () => setContextMenu(null);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setContextMenu(null);
+      }
+    };
+
+    window.addEventListener('mousedown', closeMenu);
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('mousedown', closeMenu);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [contextMenu]);
 
   // ── Add shapefile layers ───────────────────────────────────
   useEffect(() => {
@@ -255,6 +324,22 @@ export default function MapView({ focusCoords, layers, onLayersChange }: MapView
         <div style={{ ...S.tooltip, left: tooltip.x + 14, top: tooltip.y - 14 }}>
           <strong>{tooltip.name}</strong>
           {tooltip.continent && <span style={{ color: 'var(--text3)', fontSize: 10 }}> · {tooltip.continent}</span>}
+        </div>
+      )}
+
+      {contextMenu && (
+        <div
+          style={{ ...S.contextMenu, left: Math.min(contextMenu.x, window.innerWidth - 280), top: contextMenu.y }}
+          onMouseDown={(event) => event.stopPropagation()}
+        >
+          <div style={S.contextHeader}>Copy Coords</div>
+          <div style={S.contextPreview}>{formatDD(contextMenu.point)}</div>
+          <button style={S.contextButton} onClick={() => void copyText('DD', formatDD(contextMenu.point))}>Copy DD</button>
+          <button style={S.contextButton} onClick={() => void copyText('D', formatD(contextMenu.point))}>Copy D</button>
+          <button style={S.contextButton} onClick={() => void copyText('DMS', formatDMS(contextMenu.point))}>Copy DMS</button>
+          <button style={S.contextButton} onClick={() => void copyText('UTM', formatUTM(contextMenu.point))}>Copy UTM</button>
+          <button style={{ ...S.contextButton, ...S.contextPrimary }} onClick={() => void copyText('All formats', formatAllCoordinateTypes(contextMenu.point))}>Copy All</button>
+          {contextMenu.copied && <div style={S.contextStatus}>Copied: {contextMenu.copied}</div>}
         </div>
       )}
 
@@ -330,6 +415,52 @@ const S: Record<string, CSSProperties> = {
     borderRadius: 7, padding: '5px 10px', fontSize: 12,
     color: 'var(--text)', backdropFilter: 'blur(4px)',
     boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
+  },
+  contextMenu: {
+    position: 'absolute',
+    zIndex: 40,
+    width: 220,
+    background: 'rgba(8,17,30,0.96)',
+    border: '1px solid var(--border)',
+    borderRadius: 10,
+    padding: 8,
+    boxShadow: '0 10px 24px rgba(0,0,0,0.45)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 6,
+    backdropFilter: 'blur(8px)',
+  },
+  contextHeader: {
+    fontSize: 12,
+    fontWeight: 700,
+    color: 'var(--text)',
+  },
+  contextPreview: {
+    fontSize: 11,
+    color: 'var(--text3)',
+    paddingBottom: 4,
+    borderBottom: '1px solid var(--border)',
+  },
+  contextButton: {
+    background: 'var(--surface2)',
+    border: '1px solid var(--border)',
+    borderRadius: 8,
+    color: 'var(--text)',
+    padding: '7px 10px',
+    fontSize: 12,
+    textAlign: 'left',
+    cursor: 'pointer',
+    fontFamily: 'var(--font)',
+  },
+  contextPrimary: {
+    background: 'rgba(79,127,255,0.18)',
+    borderColor: 'rgba(79,127,255,0.4)',
+    color: '#d9e7ff',
+  },
+  contextStatus: {
+    fontSize: 11,
+    color: 'var(--green)',
+    paddingTop: 2,
   },
   contLegend: {
     position: 'absolute', bottom: 40, right: 10, zIndex: 10,

@@ -81,6 +81,17 @@ def init_db() -> None:
                 );
                 """
             )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS quest_sort_orders (
+                    group_name TEXT NOT NULL,
+                    view_name TEXT NOT NULL,
+                    order_data JSONB NOT NULL DEFAULT '[]'::jsonb,
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    PRIMARY KEY (group_name, view_name)
+                );
+                """
+            )
 
             cur.execute("SELECT COUNT(*) AS count FROM users;")
             users_count = cur.fetchone()["count"]

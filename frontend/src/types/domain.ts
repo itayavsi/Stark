@@ -19,7 +19,7 @@ export type QuestStatus =
 export type FtOption = 'FT1' | 'FT2' | 'FT3' | 'FT4' | 'FT5';
 
 export interface Quest {
-  id: number;
+  id: string;
   title: string;
   description?: string;
   ft?: FtOption | string;
@@ -44,6 +44,7 @@ export interface CreateQuestInput {
   year?: number;
   ft?: FtOption | string;
   group?: string;
+  shapefile_path?: string;
 }
 
 export interface GeoGeometry {
@@ -93,7 +94,20 @@ export interface UploadShapefileResponse {
   layers?: UploadedLayerPayload[];
 }
 
+export interface ResolveShpFolderResponse {
+  path: string;
+  shapefile_path: string;
+}
+
 export interface LngLatPoint {
   lng: number;
   lat: number;
+}
+
+export type MapBounds = [[number, number], [number, number]];
+
+export interface QuestSortOrderResponse {
+  group: string;
+  view: string;
+  quest_ids: string[];
 }
