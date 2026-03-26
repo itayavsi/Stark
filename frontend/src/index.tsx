@@ -3,6 +3,7 @@ import { BrowserRouter } from 'react-router-dom';
 
 import App from './App';
 import { AuthProvider } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
 import './styles/theme.css';
 
 const rootElement = document.getElementById('root');
@@ -12,9 +13,11 @@ if (!rootElement) {
 }
 
 ReactDOM.createRoot(rootElement).render(
-  <AuthProvider>
-    <BrowserRouter>
-      <App />
-    </BrowserRouter>
-  </AuthProvider>
+  <ThemeProvider>
+    <AuthProvider>
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
+    </AuthProvider>
+  </ThemeProvider>
 );

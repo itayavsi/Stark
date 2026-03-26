@@ -3,23 +3,53 @@ import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import FALLBACK_WORLD from '../services/worldMap';
 
+import { useTheme } from '../context/ThemeContext';
 import { FT_COLORS, ftColor } from '../services/ftConfig';
 import { formatAllCoordinateTypes, formatD, formatDD, formatDMS, formatUTM } from '../utils/geo';
 import type { AppLayer, GeoFeatureCollection, LngLatPoint, MapBounds } from '../types/domain';
 
-// Continent fill colors
-const CONTINENT_FILL = [
-  'match', ['get', 'continent'],
-  'North America', '#1b3a5c',
-  'South America', '#1a4535',
-  'Europe',        '#252060',
-  'Asia',          '#3a2010',
-  'Africa',        '#3a2810',
-  'Oceania',       '#0e3040',
-  '#1a2540',
-];
+function getMapPalette(mode: 'dark' | 'light') {
+  if (mode === 'light') {
+    return {
+      background: '#f6efe2',
+      line: '#cdb89d',
+      hover: 'rgba(161,29,47,0.12)',
+      labelColor: '#8d1d2c',
+      labelShadow: '#f8f2e7',
+      continentFill: [
+        'match', ['get', 'continent'],
+        'North America', '#dfc08b',
+        'South America', '#d5b07e',
+        'Europe', '#f0d9a5',
+        'Asia', '#cf9c65',
+        'Africa', '#c58a53',
+        'Oceania', '#e2c791',
+        '#ead9b2',
+      ] as unknown[],
+    };
+  }
 
-function buildStyle(worldData: GeoFeatureCollection) {
+  return {
+    background: '#08111e',
+    line: '#2a3f6a',
+    hover: 'rgba(255,255,255,0.1)',
+    labelColor: '#8ab0d0',
+    labelShadow: '#08111e',
+    continentFill: [
+      'match', ['get', 'continent'],
+      'North America', '#1b3a5c',
+      'South America', '#1a4535',
+      'Europe', '#252060',
+      'Asia', '#3a2010',
+      'Africa', '#3a2810',
+      'Oceania', '#0e3040',
+      '#1a2540',
+    ] as unknown[],
+  };
+}
+
+function buildStyle(worldData: GeoFeatureCollection, mode: 'dark' | 'light') {
+  const palette = getMapPalette(mode);
   return {
     version: 8,
     name: 'GIS Offline',
@@ -29,10 +59,10 @@ function buildStyle(worldData: GeoFeatureCollection) {
       world: { type: 'geojson', data: worldData },
     },
     layers: [
-      { id: 'bg',             type: 'background', paint: { 'background-color': '#08111e' } },
-      { id: 'countries-fill', type: 'fill',       source: 'world', paint: { 'fill-color': CONTINENT_FILL, 'fill-opacity': 1 } },
-      { id: 'countries-hover',type: 'fill',       source: 'world', paint: { 'fill-color': '#ffffff', 'fill-opacity': ['case', ['boolean', ['feature-state', 'hover'], false], 0.1, 0] } },
-      { id: 'countries-line', type: 'line',       source: 'world', paint: { 'line-color': '#2a3f6a', 'line-width': 0.7 } },
+      { id: 'bg',             type: 'background', paint: { 'background-color': palette.background } },
+      { id: 'countries-fill', type: 'fill',       source: 'world', paint: { 'fill-color': palette.continentFill, 'fill-opacity': 1 } },
+      { id: 'countries-hover',type: 'fill',       source: 'world', paint: { 'fill-color': '#ffffff', 'fill-opacity': ['case', ['boolean', ['feature-state', 'hover'], false], mode === 'light' ? 0.18 : 0.1, 0] } },
+      { id: 'countries-line', type: 'line',       source: 'world', paint: { 'line-color': palette.line, 'line-width': 0.7 } },
     ],
   };
 }
@@ -86,6 +116,7 @@ const LABELS = [
 interface MapViewProps {
   focusCoords: LngLatPoint | null;
   focusBounds: MapBounds | null;
+  jumpMarker: LngLatPoint | null;
   layers: AppLayer[];
   onLayersChange?: () => void;
 }
@@ -101,10 +132,20 @@ interface LayerState {
 
 let layerCounter = 0;
 
-export default function MapView({ focusCoords, focusBounds, layers, onLayersChange }: MapViewProps) {
+function normalizeCountryName(rawName: string): string {
+  const trimmed = rawName.trim();
+  if (trimmed === 'Palestine' || trimmed === 'Palestinian Territories' || trimmed === 'State of Palestine') {
+    return 'Gaza';
+  }
+  return trimmed;
+}
+
+export default function MapView({ focusCoords, focusBounds, jumpMarker, layers, onLayersChange }: MapViewProps) {
+  const { mode } = useTheme();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
+  const jumpMarkerRef = useRef<maplibregl.Marker | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [layerList, setLayerList] = useState<LayerState[]>([]);
   const [showPanel, setShowPanel] = useState(false);
@@ -137,6 +178,7 @@ export default function MapView({ focusCoords, focusBounds, layers, onLayersChan
 
   // ── Render HTML country labels ─────────────────────────────
   const renderLabels = useCallback((map: maplibregl.Map) => {
+    const palette = getMapPalette(mode);
     markersRef.current.forEach((marker) => marker.remove());
     markersRef.current = [];
     const z = map.getZoom();
@@ -147,11 +189,11 @@ export default function MapView({ focusCoords, focusBounds, layers, onLayersChan
       // Show Hebrew at zoom >= 5, English otherwise
       el.textContent = z >= 5 ? lbl.he : lbl.en;
       el.style.cssText = [
-        'color:#8ab0d0',
+        `color:${palette.labelColor}`,
         `font-size:${z >= 6 ? 12 : z >= 4 ? 10 : 9}px`,
         'font-weight:600',
         "font-family:'Segoe UI',Arial,sans-serif",
-        'text-shadow:0 0 4px #08111e,0 0 8px #08111e,0 0 3px #08111e',
+        `text-shadow:0 0 4px ${palette.labelShadow},0 0 8px ${palette.labelShadow},0 0 3px ${palette.labelShadow}`,
         'pointer-events:none',
         'white-space:nowrap',
         'letter-spacing:0.4px',
@@ -183,7 +225,7 @@ export default function MapView({ focusCoords, focusBounds, layers, onLayersChan
 
       const map = new maplibregl.Map({
         container: containerRef.current,
-        style: buildStyle(worldData) as any,
+        style: buildStyle(worldData, mode) as any,
         center: [20, 20],
         zoom: 2.5,
         attributionControl: false,
@@ -207,7 +249,12 @@ export default function MapView({ focusCoords, focusBounds, layers, onLayersChan
           hovId = feat.id;
           map.setFeatureState({ source: 'world', id: feat.id }, { hover: true });
           const p = feat.properties;
-          setTooltip({ name: p.name || p.NAME || p.ADMIN || '', continent: p.continent || '', x: e.point.x, y: e.point.y });
+          setTooltip({
+            name: normalizeCountryName(String(p.name || p.NAME || p.ADMIN || '')),
+            continent: p.continent || '',
+            x: e.point.x,
+            y: e.point.y,
+          });
         });
         map.on('mouseleave', 'countries-fill', () => {
           map.getCanvas().style.cursor = '';
@@ -233,15 +280,60 @@ export default function MapView({ focusCoords, focusBounds, layers, onLayersChan
     initMap();
     return () => {
       markersRef.current.forEach(m => m.remove());
+      if (jumpMarkerRef.current) {
+        jumpMarkerRef.current.remove();
+        jumpMarkerRef.current = null;
+      }
       if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
     };
-  }, [renderLabels]);
+  }, [mode, renderLabels]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) {
+      return;
+    }
+
+    const palette = getMapPalette(mode);
+    if (map.getLayer('bg')) {
+      map.setPaintProperty('bg', 'background-color', palette.background);
+    }
+    if (map.getLayer('countries-fill')) {
+      map.setPaintProperty('countries-fill', 'fill-color', palette.continentFill as any);
+    }
+    if (map.getLayer('countries-line')) {
+      map.setPaintProperty('countries-line', 'line-color', palette.line);
+    }
+
+    renderLabels(map);
+  }, [mode, renderLabels]);
 
   // ── Fly to coords ──────────────────────────────────────────
   useEffect(() => {
     if (focusCoords && mapRef.current)
       mapRef.current.flyTo({ center: [focusCoords.lng, focusCoords.lat], zoom: 10, duration: 1200 });
   }, [focusCoords]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !jumpMarker) {
+      return;
+    }
+
+    if (!jumpMarkerRef.current) {
+      const element = document.createElement('div');
+      element.innerHTML = '📍';
+      element.style.fontSize = '28px';
+      element.style.lineHeight = '1';
+      element.style.filter = 'drop-shadow(0 4px 8px rgba(0,0,0,0.35))';
+      jumpMarkerRef.current = new maplibregl.Marker({ element, anchor: 'bottom' })
+        .setLngLat([jumpMarker.lng, jumpMarker.lat])
+        .addTo(map);
+      return;
+    }
+
+    jumpMarkerRef.current.setLngLat([jumpMarker.lng, jumpMarker.lat]);
+  }, [jumpMarker]);
 
   useEffect(() => {
     if (!focusBounds || !mapRef.current) {
@@ -332,13 +424,14 @@ export default function MapView({ focusCoords, focusBounds, layers, onLayersChan
           style={{ ...S.contextMenu, left: Math.min(contextMenu.x, window.innerWidth - 280), top: contextMenu.y }}
           onMouseDown={(event) => event.stopPropagation()}
         >
-          <div style={S.contextHeader}>Copy Coords</div>
-          <div style={S.contextPreview}>{formatDD(contextMenu.point)}</div>
+          <div style={S.contextHeader}>UTM Coord</div>
+          <div style={S.contextPreview}>{formatUTM(contextMenu.point)}</div>
+          <button style={{ ...S.contextButton, ...S.contextPrimary }} onClick={() => void copyText('UTM', formatUTM(contextMenu.point))}>Copy UTM</button>
+          <div style={S.contextSectionTitle}>Copy GEO Coord</div>
           <button style={S.contextButton} onClick={() => void copyText('DD', formatDD(contextMenu.point))}>Copy DD</button>
           <button style={S.contextButton} onClick={() => void copyText('D', formatD(contextMenu.point))}>Copy D</button>
           <button style={S.contextButton} onClick={() => void copyText('DMS', formatDMS(contextMenu.point))}>Copy DMS</button>
-          <button style={S.contextButton} onClick={() => void copyText('UTM', formatUTM(contextMenu.point))}>Copy UTM</button>
-          <button style={{ ...S.contextButton, ...S.contextPrimary }} onClick={() => void copyText('All formats', formatAllCoordinateTypes(contextMenu.point))}>Copy All</button>
+          <button style={S.contextButton} onClick={() => void copyText('All formats', formatAllCoordinateTypes(contextMenu.point))}>Copy Full Coord Set</button>
           {contextMenu.copied && <div style={S.contextStatus}>Copied: {contextMenu.copied}</div>}
         </div>
       )}
@@ -407,11 +500,11 @@ export default function MapView({ focusCoords, focusBounds, layers, onLayersChan
 }
 
 const S: Record<string, CSSProperties> = {
-  wrap: { width: '100%', height: '100%', position: 'relative', background: '#08111e' },
+  wrap: { width: '100%', height: '100%', position: 'relative', background: 'var(--map-bg)' },
   map:  { width: '100%', height: '100%' },
   tooltip: {
     position: 'absolute', zIndex: 30, pointerEvents: 'none',
-    background: 'rgba(8,17,30,0.92)', border: '1px solid var(--border)',
+    background: 'var(--overlay-strong)', border: '1px solid var(--border)',
     borderRadius: 7, padding: '5px 10px', fontSize: 12,
     color: 'var(--text)', backdropFilter: 'blur(4px)',
     boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
@@ -420,7 +513,7 @@ const S: Record<string, CSSProperties> = {
     position: 'absolute',
     zIndex: 40,
     width: 220,
-    background: 'rgba(8,17,30,0.96)',
+    background: 'var(--overlay-strong)',
     border: '1px solid var(--border)',
     borderRadius: 10,
     padding: 8,
@@ -441,6 +534,14 @@ const S: Record<string, CSSProperties> = {
     paddingBottom: 4,
     borderBottom: '1px solid var(--border)',
   },
+  contextSectionTitle: {
+    fontSize: 10,
+    fontWeight: 700,
+    color: 'var(--text3)',
+    textTransform: 'uppercase',
+    letterSpacing: '0.06em',
+    marginTop: 4,
+  },
   contextButton: {
     background: 'var(--surface2)',
     border: '1px solid var(--border)',
@@ -453,9 +554,9 @@ const S: Record<string, CSSProperties> = {
     fontFamily: 'var(--font)',
   },
   contextPrimary: {
-    background: 'rgba(79,127,255,0.18)',
-    borderColor: 'rgba(79,127,255,0.4)',
-    color: '#d9e7ff',
+    background: 'var(--accent-soft)',
+    borderColor: 'color-mix(in srgb, var(--accent) 40%, transparent)',
+    color: 'var(--text)',
   },
   contextStatus: {
     fontSize: 11,
@@ -464,7 +565,7 @@ const S: Record<string, CSSProperties> = {
   },
   contLegend: {
     position: 'absolute', bottom: 40, right: 10, zIndex: 10,
-    background: 'rgba(8,17,30,0.9)', border: '1px solid var(--border)',
+    background: 'var(--overlay)', border: '1px solid var(--border)',
     borderRadius: 10, padding: '8px 12px', backdropFilter: 'blur(6px)',
   },
   contTitle: { fontSize: 9, fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 5 },
@@ -473,14 +574,14 @@ const S: Record<string, CSSProperties> = {
   contLabel: { fontSize: 10, color: 'var(--text2)' },
   badge: {
     position: 'absolute', bottom: 8, left: '50%', transform: 'translateX(-50%)',
-    background: 'rgba(8,17,30,0.85)', border: '1px solid var(--border)',
+    background: 'var(--overlay)', border: '1px solid var(--border)',
     borderRadius: 20, padding: '3px 12px', fontSize: 10, color: 'var(--text3)',
     display: 'flex', alignItems: 'center', gap: 5, pointerEvents: 'none', zIndex: 5,
   },
   badgeDot: { width: 6, height: 6, borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 5px #22c55e' },
   layerToggle: {
     position: 'absolute', top: 12, right: 60,
-    background: 'rgba(24,28,39,0.92)', border: '1px solid var(--border)',
+    background: 'var(--overlay)', border: '1px solid var(--border)',
     borderRadius: 'var(--radius)', color: 'var(--text)',
     padding: '7px 14px', fontSize: 13, fontWeight: 500,
     cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
@@ -489,7 +590,7 @@ const S: Record<string, CSSProperties> = {
   layerCount: { background: 'var(--accent)', color: '#fff', borderRadius: 20, fontSize: 10, padding: '1px 6px', fontWeight: 700 },
   panel: {
     position: 'absolute', top: 50, right: 60, width: 220,
-    background: 'rgba(24,28,39,0.96)', border: '1px solid var(--border)',
+    background: 'var(--overlay-strong)', border: '1px solid var(--border)',
     borderRadius: 'var(--radius-lg)', padding: 12,
     boxShadow: 'var(--shadow)', zIndex: 10, maxHeight: '50vh', overflowY: 'auto',
     backdropFilter: 'blur(8px)',

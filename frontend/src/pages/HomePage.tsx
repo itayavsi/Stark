@@ -17,6 +17,7 @@ export default function HomePage() {
   const { quests, loading, refresh } = useQuests();
   const [panelOpen, setPanelOpen] = useState(true);
   const [focusCoords, setFocusCoords] = useState<LngLatPoint | null>(null);
+  const [jumpMarker, setJumpMarker] = useState<LngLatPoint | null>(null);
   const [focusBounds, setFocusBounds] = useState<MapBounds | null>(null);
   const [pendingLayers, setPendingLayers] = useState<AppLayer[]>([]);
   const [tableLayers, setTableLayers] = useState<AppLayer[]>([]);
@@ -84,6 +85,12 @@ export default function HomePage() {
     if (point) {
       setFocusCoords(point);
     }
+  }, []);
+
+  const handleJumpToPoint = useCallback((point: LngLatPoint) => {
+    setFocusBounds(null);
+    setFocusCoords(point);
+    setJumpMarker(point);
   }, []);
 
   useEffect(() => {
@@ -196,6 +203,7 @@ export default function HomePage() {
           <MapView
             focusCoords={focusCoords}
             focusBounds={focusBounds}
+            jumpMarker={jumpMarker}
             layers={pendingLayers}
             onLayersChange={handleLayersConsumed}
           />
@@ -247,6 +255,7 @@ export default function HomePage() {
                 loading={loading}
                 onRefresh={refresh}
                 onShowOnMap={handleShowQuestOnMap}
+                onJumpToPoint={handleJumpToPoint}
                 onLayerAdded={handleLayerAdded}
                 onOpenTable={handleOpenTable}
               />
@@ -361,8 +370,8 @@ const S: Record<string, CSSProperties> = {
     zIndex: 50,
     fontSize: 11,
     color: 'var(--text3)',
-    background: 'rgba(8,17,30,0.72)',
-    border: '1px solid rgba(255,255,255,0.08)',
+    background: 'var(--overlay)',
+    border: '1px solid var(--overlay-border)',
     borderRadius: 999,
     padding: '4px 10px',
     backdropFilter: 'blur(6px)',

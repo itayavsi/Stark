@@ -7,9 +7,10 @@ import {
 } from 'react';
 
 import { useAuth } from '../context/AuthContext';
-import { createQuest, getQuestSortOrder, resolveShpFolder, saveQuestSortOrder, setQuestStatus } from '../services/api';
+import { createQuest, getQuestSortOrder, saveQuestSortOrder, setQuestStatus } from '../services/api';
 import { FT_OPTIONS, ftColor } from '../services/ftConfig';
-import type { AppLayer, FtOption, Quest } from '../types/domain';
+import type { AppLayer, FtOption, LngLatPoint, Quest } from '../types/domain';
+import { parseUTM } from '../utils/geo';
 import {
   ALL_QUEST_COLUMNS,
   QUEST_SORT_OPTIONS,
@@ -30,6 +31,7 @@ interface QuestPanelProps {
   loading: boolean;
   onRefresh: () => Promise<void> | void;
   onShowOnMap: (quest: Quest) => Promise<void> | void;
+  onJumpToPoint: (point: LngLatPoint) => void;
   onLayerAdded: (layer: AppLayer) => void;
   onOpenTable: (layers: AppLayer[]) => void;
 }
@@ -39,6 +41,7 @@ export default function QuestPanel({
   loading,
   onRefresh,
   onShowOnMap,
+  onJumpToPoint,
   onLayerAdded,
   onOpenTable,
 }: QuestPanelProps) {
@@ -51,9 +54,12 @@ export default function QuestPanel({
   const [newDesc, setNewDesc] = useState('');
   const [newYear, setNewYear] = useState(2026);
   const [newFt, setNewFt] = useState<FtOption>('FT1');
-  const [newModelPath, setNewModelPath] = useState('');
-  const [resolvedShapefilePath, setResolvedShapefilePath] = useState('');
-  const [resolvingPath, setResolvingPath] = useState(false);
+  const [showJump, setShowJump] = useState(false);
+  const [jumpMode, setJumpMode] = useState<'utm' | 'dd'>('utm');
+  const [jumpLat, setJumpLat] = useState('');
+  const [jumpLng, setJumpLng] = useState('');
+  const [jumpUtm, setJumpUtm] = useState('');
+  const [jumpError, setJumpError] = useState('');
   const [creating, setCreating] = useState(false);
   const [sortCol, setSortCol] = useState<(typeof ALL_QUEST_COLUMNS)[number] | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
@@ -183,51 +189,23 @@ export default function QuestPanel({
 
     setCreating(true);
     try {
-      let shapefilePath = resolvedShapefilePath;
-
-      if (newModelPath.trim() && !shapefilePath) {
-        const resolved = await resolveShpFolder(newModelPath.trim());
-        shapefilePath = resolved.shapefile_path;
-        setResolvedShapefilePath(resolved.shapefile_path);
-      }
-
       await createQuest({
         title: newTitle,
         description: newDesc,
         year: newYear,
         ft: newFt,
         group: 'לווינות',
-        shapefile_path: shapefilePath || undefined,
       });
       setNewTitle('');
       setNewDesc('');
       setNewYear(2026);
       setNewFt('FT1');
-      setNewModelPath('');
-      setResolvedShapefilePath('');
       setShowNew(false);
       await onRefresh();
     } catch {
       alert('שגיאה ביצירת משימה');
     } finally {
       setCreating(false);
-    }
-  };
-
-  const handleResolveShpPath = async () => {
-    if (!newModelPath.trim()) {
-      return;
-    }
-
-    setResolvingPath(true);
-    try {
-      const resolved = await resolveShpFolder(newModelPath.trim());
-      setResolvedShapefilePath(resolved.shapefile_path);
-    } catch {
-      setResolvedShapefilePath('');
-      alert("לא נמצאה תיקיית 'shp' או קובץ 'shp.zip' בנתיב שסופק");
-    } finally {
-      setResolvingPath(false);
     }
   };
 
@@ -243,6 +221,37 @@ export default function QuestPanel({
     const a    = document.createElement('a'); a.href = url;
     a.download = `quests_${view}.csv`; a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleJumpSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (jumpMode === 'utm') {
+      const point = parseUTM(jumpUtm);
+      if (!point) {
+        setJumpError('יש להזין UTM בפורמט כמו 36R 712345 3512345');
+        return;
+      }
+      setJumpError('');
+      onJumpToPoint(point);
+      return;
+    }
+
+    const lat = Number(jumpLat.trim());
+    const lng = Number(jumpLng.trim());
+
+    if (Number.isNaN(lat) || Number.isNaN(lng)) {
+      setJumpError('יש להזין קו רוחב וקו אורך במספרים');
+      return;
+    }
+
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      setJumpError('קו רוחב חייב להיות בין 90- ל-90 וקו אורך בין 180- ל-180');
+      return;
+    }
+
+    setJumpError('');
+    onJumpToPoint({ lat, lng });
   };
 
   // ── Fullscreen Excel view ─────────────────────────────
@@ -390,6 +399,9 @@ export default function QuestPanel({
           <span style={S.title}>{currentView.icon} {currentView.label}</span>
           <div style={S.headerActions}>
             <span style={S.countBadge}>{filtered.length}</span>
+            <button className="btn btn-ghost btn-sm" onClick={() => setShowJump((current) => !current)} title="קפיצה לנקודה">
+              {showJump ? '✕ סגור' : '📍 קפוץ'}
+            </button>
             {isLeader && (
               <button className="btn btn-primary btn-sm" onClick={() => setShowNew(v => !v)}>
                 {showNew ? '✕' : '+ חדש'}
@@ -408,31 +420,6 @@ export default function QuestPanel({
             <textarea className="input" placeholder="תיאור (אופציונלי)" value={newDesc}
               onChange={e => setNewDesc(e.target.value)} rows={2} style={{ resize: 'vertical', fontSize: 13 }} />
             <div style={{ display: 'flex', gap: 6 }}>
-              <input
-                className="input"
-                placeholder="נתיב מודל / תיקייה"
-                value={newModelPath}
-                onChange={e => {
-                  setNewModelPath(e.target.value);
-                  setResolvedShapefilePath('');
-                }}
-                style={{ fontSize: 13, flex: 1 }}
-              />
-              <button
-                className="btn btn-ghost"
-                type="button"
-                onClick={handleResolveShpPath}
-                disabled={resolvingPath || !newModelPath.trim()}
-              >
-                {resolvingPath ? 'מחפש...' : 'בדוק shp'}
-              </button>
-            </div>
-            {resolvedShapefilePath && (
-              <div style={{ fontSize: 12, color: 'var(--text2)' }}>
-                נתיב shp: {resolvedShapefilePath}
-              </div>
-            )}
-            <div style={{ display: 'flex', gap: 6 }}>
               <select className="input" value={newYear} onChange={e => setNewYear(Number(e.target.value))} style={{ fontSize: 13, flex: 1 }}>
                 {[2026, 2025, 2024, 2023].map(y => <option key={y} value={y}>{y}</option>)}
               </select>
@@ -443,6 +430,86 @@ export default function QuestPanel({
                 {creating ? '...' : 'צור'}
               </button>
             </div>
+          </form>
+        )}
+
+        {showJump && (
+          <form onSubmit={handleJumpSubmit} style={S.jumpForm}>
+            <div style={S.jumpHeader}>📍 Jump To Point</div>
+            <div style={S.jumpToggleRow}>
+              <button
+                className="btn btn-ghost btn-sm"
+                type="button"
+                onClick={() => {
+                  setJumpMode('utm');
+                  setJumpError('');
+                }}
+                style={jumpMode === 'utm' ? S.jumpModeActive : undefined}
+              >
+                UTM
+              </button>
+              <button
+                className="btn btn-ghost btn-sm"
+                type="button"
+                onClick={() => {
+                  setJumpMode('dd');
+                  setJumpError('');
+                }}
+                style={jumpMode === 'dd' ? S.jumpModeActive : undefined}
+              >
+                DD
+              </button>
+            </div>
+            {jumpMode === 'utm' ? (
+              <input
+                className="input"
+                placeholder="36R 712345 3512345"
+                value={jumpUtm}
+                onChange={(event) => {
+                  setJumpUtm(event.target.value);
+                  if (jumpError) {
+                    setJumpError('');
+                  }
+                }}
+                style={{ fontSize: 13 }}
+              />
+            ) : (
+              <div style={S.jumpRow}>
+                <input
+                  className="input"
+                  placeholder="קו רוחב / Latitude"
+                  value={jumpLat}
+                  onChange={(event) => {
+                    setJumpLat(event.target.value);
+                    if (jumpError) {
+                      setJumpError('');
+                    }
+                  }}
+                  style={{ fontSize: 13, flex: 1 }}
+                />
+                <input
+                  className="input"
+                  placeholder="קו אורך / Longitude"
+                  value={jumpLng}
+                  onChange={(event) => {
+                    setJumpLng(event.target.value);
+                    if (jumpError) {
+                      setJumpError('');
+                    }
+                  }}
+                  style={{ fontSize: 13, flex: 1 }}
+                />
+              </div>
+            )}
+            <div style={S.jumpActions}>
+              <div style={S.jumpHint}>
+                {jumpMode === 'utm' ? 'ברירת מחדל: UTM. אפשר לעבור ל-DD אם צריך' : 'דוגמה ל-DD: 31.778, 35.235'}
+              </div>
+              <button className="btn btn-primary btn-sm" type="submit">
+                📍 הצג על המפה
+              </button>
+            </div>
+            {jumpError && <div style={S.jumpError}>{jumpError}</div>}
           </form>
         )}
 
@@ -560,6 +627,14 @@ const S: Record<string, CSSProperties> = {
   title:   { fontSize:13, fontWeight:700, color:'var(--text)' },
   countBadge: { background:'rgba(79,127,255,0.15)', color:'var(--accent)', borderRadius:20, fontSize:11, fontWeight:700, padding:'1px 8px' },
   newForm: { display:'flex', flexDirection:'column', gap:6, background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:10 },
+  jumpForm: { display:'flex', flexDirection:'column', gap:8, background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:10 },
+  jumpHeader: { fontSize:12, fontWeight:700, color:'var(--text)' },
+  jumpToggleRow: { display:'flex', gap:6 },
+  jumpModeActive: { background:'var(--accent-soft)', borderColor:'var(--accent)', color:'var(--text)' },
+  jumpRow: { display:'flex', gap:6 },
+  jumpActions: { display:'flex', justifyContent:'space-between', alignItems:'center', gap:8, flexWrap:'wrap' },
+  jumpHint: { fontSize:11, color:'var(--text3)' },
+  jumpError: { fontSize:11, color:'var(--red)' },
   sortRow: { display:'flex', gap:6, alignItems:'center' },
   sortHint: { fontSize:11, color:'var(--text3)' },
   list:    { flex:1, overflowY:'auto', overflowX:'hidden', padding:'8px', display:'flex', flexDirection:'column', gap:6, scrollbarWidth:'thin', scrollbarColor:'var(--border2) transparent' },

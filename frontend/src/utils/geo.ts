@@ -214,6 +214,96 @@ export function formatUTM(point: LngLatPoint): string {
   return `${zoneNumber}${latitudeBand} ${easting.toFixed(2)}E ${northing.toFixed(2)}N`;
 }
 
+export function parseUTM(value: string): LngLatPoint | null {
+  const match = value
+    .trim()
+    .toUpperCase()
+    .replace(/,/g, ' ')
+    .match(/^(\d{1,2})([C-HJ-NP-X])?\s+(\d+(?:\.\d+)?)\s*E?\s+(\d+(?:\.\d+)?)\s*N?$/);
+
+  if (!match) {
+    return null;
+  }
+
+  const zoneNumber = Number(match[1]);
+  const latitudeBand = match[2] || 'N';
+  const easting = Number(match[3]);
+  const northingRaw = Number(match[4]);
+
+  if (
+    !Number.isFinite(zoneNumber) ||
+    !Number.isFinite(easting) ||
+    !Number.isFinite(northingRaw) ||
+    zoneNumber < 1 ||
+    zoneNumber > 60
+  ) {
+    return null;
+  }
+
+  const x = easting - 500000.0;
+  let northing = northingRaw;
+  const isNorthernHemisphere = latitudeBand >= 'N';
+  if (!isNorthernHemisphere) {
+    northing -= 10000000.0;
+  }
+
+  const lonOrigin = (zoneNumber - 1) * 6 - 180 + 3;
+  const m = northing / UTM_SCALE_FACTOR;
+  const mu =
+    m /
+    (
+      UTM_EQUATORIAL_RADIUS *
+      (1
+        - UTM_ECC_SQUARED / 4
+        - 3 * UTM_ECC_SQUARED * UTM_ECC_SQUARED / 64
+        - 5 * UTM_ECC_SQUARED * UTM_ECC_SQUARED * UTM_ECC_SQUARED / 256)
+    );
+
+  const e1 = (1 - Math.sqrt(1 - UTM_ECC_SQUARED)) / (1 + Math.sqrt(1 - UTM_ECC_SQUARED));
+  const j1 = 3 * e1 / 2 - 27 * Math.pow(e1, 3) / 32;
+  const j2 = 21 * e1 * e1 / 16 - 55 * Math.pow(e1, 4) / 32;
+  const j3 = 151 * Math.pow(e1, 3) / 96;
+  const j4 = 1097 * Math.pow(e1, 4) / 512;
+
+  const fp =
+    mu
+    + j1 * Math.sin(2 * mu)
+    + j2 * Math.sin(4 * mu)
+    + j3 * Math.sin(6 * mu)
+    + j4 * Math.sin(8 * mu);
+
+  const sinFp = Math.sin(fp);
+  const cosFp = Math.cos(fp);
+  const tanFp = Math.tan(fp);
+  const c1 = UTM_ECC_PRIME_SQUARED * cosFp * cosFp;
+  const t1 = tanFp * tanFp;
+  const n1 = UTM_EQUATORIAL_RADIUS / Math.sqrt(1 - UTM_ECC_SQUARED * sinFp * sinFp);
+  const r1 =
+    (UTM_EQUATORIAL_RADIUS * (1 - UTM_ECC_SQUARED)) /
+    Math.pow(1 - UTM_ECC_SQUARED * sinFp * sinFp, 1.5);
+  const d = x / (n1 * UTM_SCALE_FACTOR);
+
+  const lat =
+    fp
+    - ((n1 * tanFp) / r1) *
+      (
+        (d * d) / 2
+        - (5 + 3 * t1 + 10 * c1 - 4 * c1 * c1 - 9 * UTM_ECC_PRIME_SQUARED) * Math.pow(d, 4) / 24
+        + (61 + 90 * t1 + 298 * c1 + 45 * t1 * t1 - 252 * UTM_ECC_PRIME_SQUARED - 3 * c1 * c1) * Math.pow(d, 6) / 720
+      );
+
+  const lng =
+    (d
+      - (1 + 2 * t1 + c1) * Math.pow(d, 3) / 6
+      + (5 - 2 * c1 + 28 * t1 - 3 * c1 * c1 + 8 * UTM_ECC_PRIME_SQUARED + 24 * t1 * t1) * Math.pow(d, 5) / 120) /
+      cosFp;
+
+  return {
+    lat: lat * (180 / Math.PI),
+    lng: lonOrigin + lng * (180 / Math.PI),
+  };
+}
+
 export function formatAllCoordinateTypes(point: LngLatPoint): string {
   return [
     `DD: ${formatDD(point)}`,

@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import ThemeToggle from './ThemeToggle';
 
 const ROLE_LABELS = {
   'Team Leader': 'מנהל צוות',
@@ -30,9 +31,7 @@ export default function Navbar({ onTogglePanel, panelOpen }: NavbarProps) {
       {/* Brand */}
       <div style={S.brand}>
         <span style={S.logo}>⬡</span>
-        <span style={S.brandName}>GIS מערכת</span>
-        <span style={S.sep}>·</span>
-        <span style={S.brandGroup}>לווינות</span>
+        <span style={S.brandName}>סטארק</span>
       </div>
 
       {/* Center status */}
@@ -42,6 +41,8 @@ export default function Navbar({ onTogglePanel, panelOpen }: NavbarProps) {
 
       {/* Right side */}
       <div style={S.right}>
+        <ThemeToggle compact />
+
         <button
           className="btn btn-ghost btn-sm"
           onClick={onTogglePanel}

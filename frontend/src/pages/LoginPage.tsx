@@ -1,5 +1,6 @@
 import { useEffect, useState, type CSSProperties, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
+import ThemeToggle from '../components/ThemeToggle';
 import { useAuth } from '../context/AuthContext';
 import { API_BASE_URL, login } from '../services/api';
 import type { User } from '../types/domain';
@@ -77,6 +78,9 @@ export default function LoginPage() {
 
   return (
     <div style={S.page}>
+      <div style={S.topBar}>
+        <ThemeToggle compact />
+      </div>
       <div style={S.card}>
 
         {/* Logo */}
@@ -167,6 +171,13 @@ const S: Record<string, CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'center',
     background: 'var(--bg)',
+    position: 'relative',
+  },
+  topBar: {
+    position: 'fixed',
+    top: 16,
+    right: 16,
+    zIndex: 20,
   },
   card: {
     width: '100%',
@@ -232,8 +243,8 @@ const S: Record<string, CSSProperties> = {
     zIndex: 50,
     fontSize: 11,
     color: 'var(--text3)',
-    background: 'rgba(8,17,30,0.72)',
-    border: '1px solid rgba(255,255,255,0.08)',
+    background: 'var(--overlay)',
+    border: '1px solid var(--overlay-border)',
     borderRadius: 999,
     padding: '4px 10px',
     backdropFilter: 'blur(6px)',

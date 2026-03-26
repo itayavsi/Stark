@@ -1,5 +1,6 @@
 import { useState, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
+import ThemeToggle from '../components/ThemeToggle';
 import { useAuth } from '../context/AuthContext';
 import { setSelectedGroup } from '../lib/session';
 
@@ -27,6 +28,9 @@ export default function GroupPage() {
 
   return (
     <div style={S.page}>
+      <div style={S.topBar}>
+        <ThemeToggle compact />
+      </div>
       <div style={S.container}>
 
         {/* Header */}
@@ -90,6 +94,13 @@ const S: Record<string, CSSProperties> = {
     justifyContent: 'center',
     background: 'var(--bg)',
     backgroundImage: 'radial-gradient(ellipse at 40% 60%, rgba(79,127,255,0.07) 0%, transparent 60%)',
+    position: 'relative',
+  },
+  topBar: {
+    position: 'fixed',
+    top: 16,
+    right: 16,
+    zIndex: 20,
   },
   container: {
     width: '100%',
@@ -198,8 +209,8 @@ const S: Record<string, CSSProperties> = {
     zIndex: 50,
     fontSize: 11,
     color: 'var(--text3)',
-    background: 'rgba(8,17,30,0.72)',
-    border: '1px solid rgba(255,255,255,0.08)',
+    background: 'var(--overlay)',
+    border: '1px solid var(--overlay-border)',
     borderRadius: 999,
     padding: '4px 10px',
     backdropFilter: 'blur(6px)',

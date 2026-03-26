@@ -130,6 +130,22 @@ On startup, the API creates the `users` and `quests` tables if they do not exist
 - Keep `sslmode=require` in the connection string.
 - If you want to run schema migrations later, use a direct connection string for migration tools and keep the pooled string for the app.
 
+### Import completed quests from Excel
+
+If you have a legacy Excel file with finished quests, you can import it into Postgres:
+
+```bash
+cd backend
+python scripts/import_completed_quests.py /path/to/completed-quests.xlsx --dry-run
+python scripts/import_completed_quests.py /path/to/completed-quests.xlsx
+```
+
+Default column detection supports common headers such as `title`, `description`, `date`, `assigned_user`, `group`, `year`, `ft`, and `shapefile_path`. By default imported rows are marked as `Done`, but you can override that:
+
+```bash
+python scripts/import_completed_quests.py /path/to/completed-quests.xlsx --status Approved
+```
+
 ---
 
 ## 📡 Deploy on LAN
