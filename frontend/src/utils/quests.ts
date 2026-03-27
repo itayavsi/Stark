@@ -15,6 +15,7 @@ export const QUEST_VIEWS: readonly QuestView[] = [
 ] as const;
 
 export type QuestViewId = (typeof QUEST_VIEWS)[number]['id'];
+export type QuestSearchScope = 'current' | 'all';
 
 export const STATUS_LABELS: Record<string, string> = {
   New: 'חדש',
@@ -98,25 +99,37 @@ export function getQuestDisplayStatus(quest: Quest): QuestStatus | string {
   return quest.isNew ? 'New' : quest.status;
 }
 
-export function filterQuests(quests: Quest[], viewId: QuestViewId, search: string): Quest[] {
-  const currentView = getQuestView(viewId);
+function matchesQuestSearch(quest: Quest, search: string): boolean {
   const normalizedSearch = search.trim();
 
+  if (!normalizedSearch) {
+    return true;
+  }
+
+  return [quest.title, quest.description, quest.ft]
+    .filter(Boolean)
+    .some((value) => String(value).includes(normalizedSearch));
+}
+
+export function filterQuests(
+  quests: Quest[],
+  viewId: QuestViewId,
+  search: string,
+  scope: QuestSearchScope = 'current'
+): Quest[] {
+  const currentView = getQuestView(viewId);
+
   return quests.filter((quest) => {
-    const matchesView = viewId === 'more'
-      ? isMoreQuest(quest)
-      : !isMoreQuest(quest) && currentView.statuses.includes(quest.status);
-    if (!matchesView) {
+    const matchesView = scope === 'all'
+      ? true
+      : viewId === 'more'
+        ? isMoreQuest(quest)
+        : !isMoreQuest(quest) && currentView.statuses.includes(quest.status);
+
+    if (!matchesView || !matchesQuestSearch(quest, search)) {
       return false;
     }
-
-    if (!normalizedSearch) {
-      return true;
-    }
-
-    return [quest.title, quest.description, quest.ft]
-      .filter(Boolean)
-      .some((value) => String(value).includes(normalizedSearch));
+    return true;
   });
 }
 

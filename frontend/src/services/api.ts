@@ -10,6 +10,8 @@ import type {
   ResolveShpFolderResponse,
   UploadShapefileResponse,
   User,
+  UserCreateInput,
+  UserUpdateInput,
 } from '../types/domain';
 
 export const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -80,5 +82,14 @@ export const saveQuestSortOrder = (group: string, view: string, questIds: string
 
 export const getUsers = () =>
   api.get<User[]>('/users/').then((response) => response.data);
+
+export const createUser = (data: UserCreateInput) =>
+  api.post<User>('/users/', data).then((response) => response.data);
+
+export const updateUser = (userId: string, data: UserUpdateInput) =>
+  api.patch<User>(`/users/${userId}`, data).then((response) => response.data);
+
+export const deleteUser = (userId: string) =>
+  api.delete<{ status: string; user_id: string }>(`/users/${userId}`).then((response) => response.data);
 
 export default api;

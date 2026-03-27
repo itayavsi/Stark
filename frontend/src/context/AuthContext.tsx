@@ -21,6 +21,7 @@ interface AuthContextValue {
   token: string | null;
   isAuthenticated: boolean;
   login: (user: User, token: string) => void;
+  updateUser: (user: User) => void;
   logout: () => void;
 }
 
@@ -46,6 +47,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(nextToken);
   }, []);
 
+  const updateUser = useCallback((nextUser: User) => {
+    setUser(nextUser);
+    if (token) {
+      setStoredSession(nextUser, token);
+    }
+  }, [token]);
+
   const logout = useCallback(() => {
     clearStoredSession();
     setUser(null);
@@ -58,9 +66,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       token,
       isAuthenticated: Boolean(token),
       login,
+      updateUser,
       logout,
     }),
-    [login, logout, token, user]
+    [login, logout, token, updateUser, user]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

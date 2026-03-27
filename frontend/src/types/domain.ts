@@ -1,10 +1,26 @@
 export type UserRole = 'Team Leader' | 'User' | 'Viewer';
 
 export interface User {
+  id?: string;
   username: string;
   role: UserRole;
   display_name?: string;
   group?: string;
+}
+
+export interface UserCreateInput {
+  username: string;
+  password: string;
+  role: UserRole;
+  group?: string;
+  display_name?: string;
+}
+
+export interface UserUpdateInput {
+  display_name?: string;
+  role?: UserRole;
+  group?: string;
+  password?: string;
 }
 
 export type QuestStatus =

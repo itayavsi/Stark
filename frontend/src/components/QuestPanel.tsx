@@ -24,6 +24,7 @@ import {
   reorderQuestList,
   sortQuestsByOption,
   sortQuests,
+  type QuestSearchScope,
   type QuestSortOptionId,
   type QuestViewId,
 } from '../utils/quests';
@@ -56,6 +57,7 @@ export default function QuestPanel({
   const { user } = useAuth();
   const [view, setView] = useState<QuestViewId>('open');
   const [search, setSearch] = useState('');
+  const [searchScope, setSearchScope] = useState<QuestSearchScope>('current');
   const [showNew, setShowNew] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [newTitle, setNewTitle] = useState('');
@@ -98,9 +100,12 @@ export default function QuestPanel({
     () => quests.filter((quest) => isLowPriorityQuest(quest) && !quest.isNew && quest.status !== 'ממתין').length,
     [quests]
   );
-  const filteredBase = useMemo(() => filterQuests(quests, view, search), [quests, view, search]);
+  const filteredBase = useMemo(
+    () => filterQuests(quests, view, search, searchScope),
+    [quests, view, search, searchScope]
+  );
   const filtered = useMemo(() => {
-    if (view !== 'more') {
+    if (searchScope === 'all' || view !== 'more') {
       return filteredBase;
     }
 
@@ -111,7 +116,7 @@ export default function QuestPanel({
           ? quest.status === 'ממתין' && !quest.isNew
           : isLowPriorityQuest(quest) && !quest.isNew && quest.status !== 'ממתין'
     ));
-  }, [filteredBase, moreTab, view]);
+  }, [filteredBase, moreTab, searchScope, view]);
   const sortedRows = useMemo(() => sortQuests(filtered, sortCol, sortDir), [filtered, sortCol, sortDir]);
   const orderedFiltered = useMemo(() => {
     const manualOrder = manualOrderByView[view] || [];
@@ -127,7 +132,7 @@ export default function QuestPanel({
     [orderedFiltered, listSort, listSortDir]
   );
 
-  const manualSortDisabled = listSort !== 'manual';
+  const manualSortDisabled = listSort !== 'manual' || searchScope === 'all';
 
   useEffect(() => {
     return () => {
@@ -323,6 +328,10 @@ export default function QuestPanel({
     onJumpToPoint({ lat, lng });
   };
 
+  const toggleSearchScope = () => {
+    setSearchScope((current) => (current === 'current' ? 'all' : 'current'));
+  };
+
   // ── Fullscreen Excel view ─────────────────────────────
   if (fullscreen) {
     return (
@@ -371,12 +380,22 @@ export default function QuestPanel({
                   </button>
                 </div>
               )}
-              <input
-                style={FS.search}
-                placeholder="🔍 חיפוש..."
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-              />
+              <div style={FS.searchRow}>
+                <input
+                  style={FS.search}
+                  placeholder="🔍 חיפוש..."
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                />
+                <button
+                  className="btn btn-ghost btn-sm"
+                  type="button"
+                  onClick={toggleSearchScope}
+                  title={searchScope === 'current' ? 'חיפוש רק בתצוגה הנוכחית' : 'חיפוש בכל המשימות'}
+                >
+                  {searchScope === 'current' ? 'בתצוגה' : 'בכל'}
+                </button>
+              </div>
               <button className="btn btn-ghost btn-sm" onClick={exportCSV}>⬇ CSV</button>
               <button className="btn btn-ghost btn-sm" onClick={onRefresh}>↻</button>
               <button className="btn btn-ghost btn-sm" onClick={() => setFullscreen(false)}>✕ סגור</button>
@@ -671,8 +690,23 @@ export default function QuestPanel({
         )}
 
         {/* Search */}
-        <input className="input" placeholder="🔍 חיפוש..." value={search}
-          onChange={e => setSearch(e.target.value)} style={{ fontSize: 13 }} />
+        <div style={S.searchRow}>
+          <input
+            className="input"
+            placeholder="🔍 חיפוש..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            style={{ ...S.searchInput, fontSize: 13 }}
+          />
+          <button
+            className="btn btn-ghost btn-sm"
+            type="button"
+            onClick={toggleSearchScope}
+            title={searchScope === 'current' ? 'חיפוש רק בתצוגה הנוכחית' : 'חיפוש בכל המשימות'}
+          >
+            {searchScope === 'current' ? 'בתצוגה' : 'בכל'}
+          </button>
+        </div>
         <div style={S.sortRow}>
           <select
             className="input"
@@ -695,7 +729,7 @@ export default function QuestPanel({
           >
             {listSortDir === 'asc' ? '↑' : '↓'}
           </button>
-          {isLeader && view !== 'more' && listSort === 'manual' && (
+          {isLeader && view !== 'more' && listSort === 'manual' && searchScope !== 'all' && (
             <button
               className="btn btn-primary btn-sm"
               type="button"
@@ -860,6 +894,8 @@ const S: Record<string, CSSProperties> = {
   jumpActions: { display:'flex', justifyContent:'space-between', alignItems:'center', gap:8, flexWrap:'wrap' },
   jumpHint: { fontSize:11, color:'var(--text3)' },
   jumpError: { fontSize:11, color:'var(--red)' },
+  searchRow: { display:'flex', gap:6, alignItems:'center' },
+  searchInput: { flex:1 },
   sortRow: { display:'flex', gap:6, alignItems:'center' },
   sortHint: { fontSize:11, color:'var(--text3)' },
   list:    { flex:1, overflowY:'auto', overflowX:'hidden', padding:'8px', display:'flex', flexDirection:'column', gap:6, scrollbarWidth:'thin', scrollbarColor:'var(--border2) transparent' },
@@ -948,6 +984,11 @@ const FS: Record<string, CSSProperties> = {
     background:'rgba(79,127,255,0.12)',
     color:'var(--text)',
   },
+  searchRow: {
+    display:'flex',
+    gap:8,
+    alignItems:'center',
+  },
   search: {
     background:'var(--surface2)', border:'1px solid var(--border)',
     borderRadius:6, color:'var(--text)', padding:'5px 10px',
@@ -983,9 +1024,9 @@ const FS: Record<string, CSSProperties> = {
     fontWeight:700,
     padding:'2px 8px',
     borderRadius:20,
-    background:'rgba(148, 163, 184, 0.16)',
-    color:'#d8e1ef',
-    border:'1px solid rgba(148, 163, 184, 0.24)',
+    background:'color-mix(in srgb, var(--orange) 14%, var(--surface))',
+    color:'color-mix(in srgb, var(--orange) 76%, var(--text))',
+    border:'1px solid color-mix(in srgb, var(--orange) 32%, var(--border))',
   },
   select: {
     fontSize:11, padding:'3px 6px',

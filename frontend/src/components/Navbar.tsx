@@ -51,13 +51,18 @@ export default function Navbar({ onTogglePanel, panelOpen }: NavbarProps) {
           {panelOpen ? '◧ הסתר' : '◧ משימות'}
         </button>
 
-        <div style={S.userChip}>
+        <button
+          type="button"
+          style={S.userChip}
+          onClick={() => navigate('/profile')}
+          title="עמוד משתמש"
+        >
           <div style={S.avatar}>{avatar}</div>
           <div style={S.userInfo}>
             <span style={S.userName}>{displayName}</span>
             <span style={S.userRole}>{role}</span>
           </div>
-        </div>
+        </button>
 
         <button className="btn btn-ghost btn-sm" onClick={handleLogout}>יציאה</button>
       </div>
@@ -86,7 +91,17 @@ const S: Record<string, CSSProperties> = {
     borderRadius: 99, padding: '3px 12px', fontSize: 12, fontWeight: 500,
   },
   right:     { display: 'flex', alignItems: 'center', gap: 10 },
-  userChip:  { display: 'flex', alignItems: 'center', gap: 8 },
+  userChip:  {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    border: '1px solid var(--border)',
+    background: 'transparent',
+    borderRadius: 999,
+    padding: '4px 10px 4px 4px',
+    cursor: 'pointer',
+    transition: 'var(--transition)',
+  },
   avatar: {
     width: 30, height: 30, borderRadius: '50%',
     background: 'var(--accent)', color: '#fff',

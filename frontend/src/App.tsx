@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import GroupPage from './pages/GroupPage';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
+import UserPage from './pages/UserPage';
 import { useAuth } from './context/AuthContext';
 
 function RequireAuth({ children }: { children: ReactNode }) {
@@ -35,6 +36,14 @@ export default function App() {
         element={
           <RequireAuth>
             <HomePage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/profile"
+        element={
+          <RequireAuth>
+            <UserPage />
           </RequireAuth>
         }
       />

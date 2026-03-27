@@ -63,6 +63,60 @@ def save_user(user: Dict):
             )
 
 
+def update_user(user_id: str, updates: Dict) -> Optional[Dict]:
+    if not updates:
+        return None
+
+    allowed_fields = {
+        "password": "password",
+        "role": "role",
+        "group": "group_name",
+        "display_name": "display_name",
+    }
+    assignments = []
+    params = {"user_id": user_id}
+
+    for key, value in updates.items():
+        column = allowed_fields.get(key)
+        if not column:
+            continue
+        assignments.append(f"{column} = %({key})s")
+        params[key] = value
+
+    if not assignments:
+        return None
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""
+                UPDATE users
+                SET {", ".join(assignments)}
+                WHERE id = %(user_id)s
+                RETURNING id, username, password, role, group_name, display_name;
+                """,
+                params,
+            )
+            row = cur.fetchone()
+            if row is None:
+                return None
+            return _normalize_user(row)
+
+
+def delete_user(user_id: str) -> bool:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                DELETE FROM users
+                WHERE id = %(user_id)s
+                RETURNING id;
+                """,
+                {"user_id": user_id},
+            )
+            return cur.fetchone() is not None
+
+
 def get_quests() -> List[Dict]:
     with get_connection() as conn:
         with conn.cursor() as cur:

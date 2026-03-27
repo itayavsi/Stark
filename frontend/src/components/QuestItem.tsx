@@ -201,7 +201,7 @@ export default function QuestItem({
         <div style={S.topLeft}>
           <span className={`badge ${status.cls}`}>{status.label}</span>
           {lowPriority && <span style={S.priorityBadge}>⋯ תעדוף נמוך</span>}
-          <span style={{ fontSize:11, color: ftClr, fontWeight:700 }}>{quest.ft || quest.year}</span>
+          {!quest.ft && quest.year && <span style={{ fontSize:11, color: ftClr, fontWeight:700 }}>{quest.year}</span>}
           {quest.ft && <span style={{ ...S.ftBadge, background: ftClr + '22', color: ftClr, border: `1px solid ${ftClr}55` }}>{quest.ft}</span>}
         </div>
         <span style={S.chevron}>{expanded ? '▲' : '▼'}</span>
@@ -368,9 +368,9 @@ const S: Record<string, CSSProperties> = {
     fontWeight: 700,
     padding: '2px 8px',
     borderRadius: 20,
-    background: 'rgba(148, 163, 184, 0.16)',
-    color: '#d8e1ef',
-    border: '1px solid rgba(148, 163, 184, 0.24)',
+    background: 'color-mix(in srgb, var(--orange) 14%, var(--surface))',
+    color: 'color-mix(in srgb, var(--orange) 76%, var(--text))',
+    border: '1px solid color-mix(in srgb, var(--orange) 32%, var(--border))',
   },
   pathHint: {
     marginTop:8, fontSize:10, color:'var(--text3)',

@@ -14,6 +14,8 @@ export default function GroupPage() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [hovered, setHovered] = useState<string | null>(null);
+  const displayName = user?.display_name || user?.username || '?';
+  const avatar = displayName[0]?.toUpperCase() || '?';
 
   const handleSelect = (group: (typeof GROUPS)[number]) => {
     if (!group.active) return;
@@ -37,11 +39,25 @@ export default function GroupPage() {
         <div style={S.header}>
           <div>
             <h1 style={S.title}>בחר קבוצה</h1>
-            <p style={S.subtitle}>שלום, {user?.display_name || user?.username}</p>
+            <p style={S.subtitle}>שלום, {displayName}</p>
           </div>
-          <button className="btn btn-ghost btn-sm" onClick={handleLogout}>
-            יציאה
-          </button>
+          <div style={S.headerActions}>
+            <button
+              type="button"
+              style={S.userChip}
+              onClick={() => navigate('/profile')}
+              title="עמוד משתמש"
+            >
+              <div style={S.avatar}>{avatar}</div>
+              <div style={S.userMeta}>
+                <span style={S.userName}>{displayName}</span>
+                <span style={S.userHint}>עמוד משתמש</span>
+              </div>
+            </button>
+            <button className="btn btn-ghost btn-sm" onClick={handleLogout}>
+              יציאה
+            </button>
+          </div>
         </div>
 
         {/* Role badge */}
@@ -112,6 +128,14 @@ const S: Record<string, CSSProperties> = {
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: 12,
+    gap: 12,
+    flexWrap: 'wrap',
+  },
+  headerActions: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    flexWrap: 'wrap',
   },
   title: {
     fontSize: 26,
@@ -136,6 +160,44 @@ const S: Record<string, CSSProperties> = {
   },
   roleLabel: { color: 'var(--text3)' },
   roleValue: { color: 'var(--accent)', fontWeight: 600 },
+  userChip: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    padding: '6px 12px 6px 6px',
+    borderRadius: 999,
+    border: '1px solid var(--border)',
+    background: 'var(--surface)',
+    cursor: 'pointer',
+    boxShadow: 'var(--shadow-sm)',
+  },
+  avatar: {
+    width: 34,
+    height: 34,
+    borderRadius: '50%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: 'var(--accent)',
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 700,
+    flexShrink: 0,
+  },
+  userMeta: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+  },
+  userName: {
+    fontSize: 13,
+    fontWeight: 700,
+    color: 'var(--text)',
+  },
+  userHint: {
+    fontSize: 11,
+    color: 'var(--text3)',
+  },
 
   grid: {
     display: 'grid',
