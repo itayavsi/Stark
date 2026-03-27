@@ -21,6 +21,7 @@ def _normalize_quest(row: Dict) -> Dict:
         "title": row["title"],
         "description": row["description"],
         "status": row["status"],
+        "priority": row["priority"],
         "date": row["date"],
         "assigned_user": row["assigned_user"],
         "shapefile_path": row["shapefile_path"],
@@ -68,7 +69,7 @@ def get_quests() -> List[Dict]:
             cur.execute(
                 """
                 SELECT
-                    id, title, description, status, date, assigned_user,
+                    id, title, description, status, "תעדוף" AS priority, date, assigned_user,
                     shapefile_path, group_name, year, ft
                 FROM quests
                 ORDER BY date DESC, title ASC;
@@ -83,7 +84,7 @@ def get_quest_by_id(quest_id: str) -> Optional[Dict]:
             cur.execute(
                 """
                 SELECT
-                    id, title, description, status, date, assigned_user,
+                    id, title, description, status, "תעדוף" AS priority, date, assigned_user,
                     shapefile_path, group_name, year, ft
                 FROM quests
                 WHERE id = %(quest_id)s;
@@ -102,11 +103,11 @@ def save_quest(quest: Dict):
             cur.execute(
                 """
                 INSERT INTO quests (
-                    id, title, description, status, date, assigned_user,
+                    id, title, description, status, "תעדוף", date, assigned_user,
                     shapefile_path, group_name, year, ft
                 )
                 VALUES (
-                    %(id)s, %(title)s, %(description)s, %(status)s, %(date)s, %(assigned_user)s,
+                    %(id)s, %(title)s, %(description)s, %(status)s, %(priority)s, %(date)s, %(assigned_user)s,
                     %(shapefile_path)s, %(group_name)s, %(year)s, %(ft)s
                 );
                 """,
@@ -115,6 +116,7 @@ def save_quest(quest: Dict):
                     "title": quest["title"],
                     "description": quest["description"],
                     "status": quest["status"],
+                    "priority": quest.get("priority", "רגיל"),
                     "date": quest["date"],
                     "assigned_user": quest["assigned_user"],
                     "shapefile_path": quest["shapefile_path"],
@@ -133,6 +135,7 @@ def update_quest(quest_id: str, updates: Dict) -> Optional[Dict]:
         "title": "title",
         "description": "description",
         "status": "status",
+        "priority": '"תעדוף"',
         "date": "date",
         "assigned_user": "assigned_user",
         "shapefile_path": "shapefile_path",
@@ -161,7 +164,7 @@ def update_quest(quest_id: str, updates: Dict) -> Optional[Dict]:
                 SET {", ".join(assignments)}
                 WHERE id = %(quest_id)s
                 RETURNING
-                    id, title, description, status, date, assigned_user,
+                    id, title, description, status, "תעדוף" AS priority, date, assigned_user,
                     shapefile_path, group_name, year, ft;
                 """,
                 params,

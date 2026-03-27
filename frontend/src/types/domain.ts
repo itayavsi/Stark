@@ -14,7 +14,10 @@ export type QuestStatus =
   | 'Done'
   | 'Approved'
   | 'Stopped'
-  | 'Cancelled';
+  | 'Cancelled'
+  | 'ממתין';
+
+export type QuestPriority = 'גבוה' | 'רגיל' | 'נמוך';
 
 export type FtOption = 'FT1' | 'FT2' | 'FT3' | 'FT4' | 'FT5';
 
@@ -24,6 +27,8 @@ export interface Quest {
   description?: string;
   ft?: FtOption | string;
   status: QuestStatus | string;
+  priority?: QuestPriority | string;
+  isNew?: boolean;
   date?: string;
   assigned_user?: string;
   year?: number;
@@ -44,6 +49,8 @@ export interface LoginResponse {
 export interface CreateQuestInput {
   title: string;
   description?: string;
+  status?: QuestStatus | string;
+  priority?: QuestPriority | string;
   year?: number;
   ft?: FtOption | string;
   group?: string;

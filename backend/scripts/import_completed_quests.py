@@ -14,7 +14,7 @@ if str(PROJECT_BACKEND_DIR) not in sys.path:
 
 from services.db import get_connection  # noqa: E402
 
-VALID_STATUSES = {"Open", "Taken", "In Progress", "Done", "Approved", "Stopped", "Cancelled"}
+VALID_STATUSES = {"Open", "Taken", "In Progress", "Done", "Approved", "Stopped", "Cancelled", "ממתין"}
 DEFAULT_GROUP = "לווינות"
 DEFAULT_FT = "FT1"
 DEFAULT_STATUS = "Done"
@@ -198,6 +198,7 @@ def _load_rows(args: argparse.Namespace) -> list[ImportRow]:
             "title": raw_title,
             "description": _cell_to_text(_row_value(values, column_indexes["description"])) or "",
             "status": args.status,
+            "priority": "רגיל",
             "date": date_text,
             "assigned_user": _cell_to_text(_row_value(values, column_indexes["assigned_user"])),
             "shapefile_path": _cell_to_text(_row_value(values, column_indexes["shapefile_path"])),
@@ -239,11 +240,11 @@ def _insert_quest(cur: Any, quest: dict[str, Any]) -> None:
     cur.execute(
         """
         INSERT INTO quests (
-            id, title, description, status, date, assigned_user,
+            id, title, description, status, "תעדוף", date, assigned_user,
             shapefile_path, group_name, year, ft
         )
         VALUES (
-            %(id)s, %(title)s, %(description)s, %(status)s, %(date)s, %(assigned_user)s,
+            %(id)s, %(title)s, %(description)s, %(status)s, %(priority)s, %(date)s, %(assigned_user)s,
             %(shapefile_path)s, %(group_name)s, %(year)s, %(ft)s
         );
         """,
@@ -252,6 +253,7 @@ def _insert_quest(cur: Any, quest: dict[str, Any]) -> None:
             "title": quest["title"],
             "description": quest["description"],
             "status": quest["status"],
+            "priority": quest.get("priority", "רגיל"),
             "date": quest["date"],
             "assigned_user": quest["assigned_user"],
             "shapefile_path": quest["shapefile_path"],

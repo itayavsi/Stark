@@ -25,6 +25,7 @@ LOCAL_STATUS_TO_EXTERNAL = {
     "Approved": "Done",
     "Stopped": "Stopped",
     "Cancelled": "Stopped",
+    "ממתין": "Open",
 }
 
 
@@ -91,6 +92,7 @@ def transform_external_quest(item: dict[str, Any], status_override: str | None =
         "title": str(item.get("name", "") or "External quest"),
         "description": " | ".join(extra_bits),
         "status": local_status,
+        "priority": str(priority) if priority not in (None, "") else "רגיל",
         "date": date_text,
         "assigned_user": str(item.get("opener", "") or "") or None,
         "shapefile_path": None,

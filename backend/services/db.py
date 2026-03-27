@@ -72,6 +72,7 @@ def init_db() -> None:
                     title TEXT NOT NULL,
                     description TEXT NOT NULL DEFAULT '',
                     status TEXT NOT NULL,
+                    "תעדוף" TEXT NOT NULL DEFAULT 'רגיל',
                     date TEXT NOT NULL,
                     assigned_user TEXT NULL,
                     shapefile_path TEXT NULL,
@@ -79,6 +80,12 @@ def init_db() -> None:
                     year INTEGER NOT NULL,
                     ft TEXT NOT NULL
                 );
+                """
+            )
+            cur.execute(
+                """
+                ALTER TABLE quests
+                ADD COLUMN IF NOT EXISTS "תעדוף" TEXT NOT NULL DEFAULT 'רגיל';
                 """
             )
             cur.execute(
@@ -133,11 +140,11 @@ def init_db() -> None:
                     cur.executemany(
                         """
                         INSERT INTO quests (
-                            id, title, description, status, date, assigned_user,
+                            id, title, description, status, "תעדוף", date, assigned_user,
                             shapefile_path, group_name, year, ft
                         )
                         VALUES (
-                            %(id)s, %(title)s, %(description)s, %(status)s, %(date)s, %(assigned_user)s,
+                            %(id)s, %(title)s, %(description)s, %(status)s, %(priority)s, %(date)s, %(assigned_user)s,
                             %(shapefile_path)s, %(group_name)s, %(year)s, %(ft)s
                         )
                         ON CONFLICT (id) DO NOTHING;
@@ -148,6 +155,7 @@ def init_db() -> None:
                                 "title": quest.get("title", ""),
                                 "description": quest.get("description", ""),
                                 "status": quest.get("status", "Open"),
+                                "priority": quest.get("priority", "רגיל"),
                                 "date": _normalize_seed_date(quest.get("date")),
                                 "assigned_user": quest.get("assigned_user"),
                                 "shapefile_path": quest.get("shapefile_path"),

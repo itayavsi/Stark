@@ -1,14 +1,19 @@
 import { useEffect, useRef, useState, type ChangeEvent, type CSSProperties, type MouseEvent } from 'react';
-import { takeQuest, setQuestStatus, uploadShapefile, getLayerData } from '../services/api';
+import { takeQuest, setQuestPriority, setQuestStatus, uploadShapefile, getLayerData } from '../services/api';
 import { ftColor } from '../services/ftConfig';
 import type { AppLayer, Quest, User } from '../types/domain';
+import { getQuestDisplayStatus, isLowPriorityQuest } from '../utils/quests';
 
 const STATUS_MAP = {
+  New:           { label: '🔔 חדש', cls: 'badge-new' },
   'Open':        { label: 'פתוח',   cls: 'badge-open' },
   'Taken':       { label: 'נלקח',   cls: 'badge-taken' },
   'In Progress': { label: 'בביצוע', cls: 'badge-progress' },
   'Done':        { label: 'הושלם',  cls: 'badge-done' },
   'Approved':    { label: 'מאושר',  cls: 'badge-approved' },
+  'Stopped':     { label: 'הופסק',  cls: 'badge-open' },
+  'Cancelled':   { label: 'בוטל',   cls: 'badge-open' },
+  'ממתין':       { label: 'ממתין',  cls: 'badge-pending' },
 } as const;
 
 type MessageType = 'success' | 'error' | 'warning' | 'info';
@@ -39,8 +44,10 @@ export default function QuestItem({
   const role = user?.role || 'Viewer';
   const isViewer = role === 'Viewer';
   const isLeader = role === 'Team Leader';
-  const status = STATUS_MAP[quest.status as keyof typeof STATUS_MAP] || { label: quest.status, cls: 'badge-open' };
+  const displayStatus = getQuestDisplayStatus(quest);
+  const status = STATUS_MAP[displayStatus as keyof typeof STATUS_MAP] || { label: displayStatus, cls: 'badge-open' };
   const ftClr = ftColor(quest.ft);
+  const lowPriority = isLowPriorityQuest(quest);
 
   useEffect(() => {
     return () => {
@@ -84,6 +91,20 @@ export default function QuestItem({
       await onRefresh();
     } catch {
       showMsg('✗ שגיאה בעדכון סטטוס', 'error');
+    }
+    setBusy(false);
+  };
+
+  const handlePriorityChange = async (e: ChangeEvent<HTMLSelectElement>) => {
+    e.stopPropagation();
+    const priority = e.target.value;
+    setBusy(true);
+    try {
+      await setQuestPriority(quest.id, priority);
+      showMsg(`✓ תעדוף עודכן: ${priority}`, 'success');
+      await onRefresh();
+    } catch {
+      showMsg('✗ שגיאה בעדכון תעדוף', 'error');
     }
     setBusy(false);
   };
@@ -179,6 +200,7 @@ export default function QuestItem({
       <div style={S.topRow}>
         <div style={S.topLeft}>
           <span className={`badge ${status.cls}`}>{status.label}</span>
+          {lowPriority && <span style={S.priorityBadge}>⋯ תעדוף נמוך</span>}
           <span style={{ fontSize:11, color: ftClr, fontWeight:700 }}>{quest.ft || quest.year}</span>
           {quest.ft && <span style={{ ...S.ftBadge, background: ftClr + '22', color: ftClr, border: `1px solid ${ftClr}55` }}>{quest.ft}</span>}
         </div>
@@ -260,9 +282,35 @@ export default function QuestItem({
                 disabled={busy}
                 onClick={e => e.stopPropagation()}
               >
-                {Object.entries(STATUS_MAP).map(([k, v]) => (
-                  <option key={k} value={k}>{v.label}</option>
+                {Object.entries({
+                  Open: 'פתוח',
+                  Taken: 'נלקח',
+                  'In Progress': 'בביצוע',
+                  ממתין: 'ממתין',
+                  Done: 'הושלם',
+                  Approved: 'מאושר',
+                  Stopped: 'הופסק',
+                  Cancelled: 'בוטל',
+                }).map(([k, v]) => (
+                  <option key={k} value={k}>{v}</option>
                 ))}
+              </select>
+            </div>
+          )}
+
+          {isLeader && (
+            <div style={S.statusRow}>
+              <span style={S.statusLabel}>תעדוף:</span>
+              <select
+                style={S.select}
+                value={quest.priority || 'רגיל'}
+                onChange={handlePriorityChange}
+                disabled={busy}
+                onClick={e => e.stopPropagation()}
+              >
+                <option value="גבוה">גבוה</option>
+                <option value="רגיל">רגיל</option>
+                <option value="נמוך">נמוך</option>
               </select>
             </div>
           )}
@@ -314,6 +362,15 @@ const S: Record<string, CSSProperties> = {
     fontSize: 10, fontWeight: 700,
     padding: '1px 7px', borderRadius: 20,
     letterSpacing: '0.04em',
+  },
+  priorityBadge: {
+    fontSize: 10,
+    fontWeight: 700,
+    padding: '2px 8px',
+    borderRadius: 20,
+    background: 'rgba(148, 163, 184, 0.16)',
+    color: '#d8e1ef',
+    border: '1px solid rgba(148, 163, 184, 0.24)',
   },
   pathHint: {
     marginTop:8, fontSize:10, color:'var(--text3)',

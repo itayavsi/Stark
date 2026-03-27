@@ -7,6 +7,7 @@ import QuestPanel from '../components/QuestPanel';
 import { useQuests } from '../hooks/useQuests';
 import { getLayerData } from '../services/api';
 import { getFeaturePoint, getLayersBounds } from '../utils/geo';
+import { isMoreQuest } from '../utils/quests';
 import type { AppLayer, LngLatPoint, MapBounds, Quest } from '../types/domain';
 
 const MIN_WIDTH     = 220;
@@ -14,7 +15,7 @@ const MAX_WIDTH     = 600;
 const DEFAULT_WIDTH = 300;
 
 export default function HomePage() {
-  const { quests, loading, refresh } = useQuests();
+  const { quests, loading, latestNewQuests, refresh } = useQuests();
   const [panelOpen, setPanelOpen] = useState(true);
   const [focusCoords, setFocusCoords] = useState<LngLatPoint | null>(null);
   const [jumpMarker, setJumpMarker] = useState<LngLatPoint | null>(null);
@@ -97,7 +98,7 @@ export default function HomePage() {
     let cancelled = false;
 
     async function loadOpenQuestLayers() {
-      const openQuests = quests.filter((quest) => quest.status === 'Open');
+      const openQuests = quests.filter((quest) => quest.status === 'Open' && !isMoreQuest(quest));
       if (openQuests.length === 0) {
         if (!cancelled) {
           setTableLayers([]);
@@ -253,6 +254,7 @@ export default function HomePage() {
               <QuestPanel
                 quests={quests}
                 loading={loading}
+                latestNewQuests={latestNewQuests}
                 onRefresh={refresh}
                 onShowOnMap={handleShowQuestOnMap}
                 onJumpToPoint={handleJumpToPoint}

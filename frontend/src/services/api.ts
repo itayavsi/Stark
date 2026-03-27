@@ -47,6 +47,9 @@ export const completeQuest = (questId: string) =>
 export const setQuestStatus = (questId: string, status: string) =>
   api.patch(`/quests/${questId}/status`, { status }).then((response) => response.data);
 
+export const setQuestPriority = (questId: string, priority: string) =>
+  api.patch(`/quests/${questId}/priority`, { priority }).then((response) => response.data);
+
 export const uploadShapefile = (questId: string, file: File) => {
   const fd = new FormData();
   fd.append('quest_id', String(questId));

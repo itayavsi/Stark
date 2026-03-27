@@ -194,11 +194,13 @@ input:focus, select:focus, textarea:focus {
   letter-spacing: 0.3px;
 }
 
+.badge-new { background: color-mix(in srgb, var(--gold) 22%, transparent); color: color-mix(in srgb, var(--gold) 92%, white); }
 .badge-open { background: color-mix(in srgb, var(--accent) 16%, transparent); color: color-mix(in srgb, var(--accent) 82%, white); }
 .badge-taken { background: color-mix(in srgb, var(--gold) 18%, transparent); color: var(--gold); }
 .badge-in-progress { background: rgba(168, 85, 247, 0.15); color: #c084fc; }
 .badge-done { background: color-mix(in srgb, var(--green) 16%, transparent); color: var(--green); }
 .badge-approved { background: rgba(20, 184, 166, 0.15); color: #14b8a6; }
+.badge-pending { background: rgba(244, 114, 182, 0.16); color: #f9a8d4; }
 
 .maplibregl-ctrl-bottom-left,
 .maplibregl-ctrl-bottom-right {

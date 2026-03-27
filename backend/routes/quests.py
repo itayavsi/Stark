@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Body
 from services.quest_service import (
     get_all_quests, create_quest, take_quest,
     complete_quest, update_quest_status, get_saved_quest_sort,
-    save_saved_quest_sort
+    save_saved_quest_sort, update_quest_priority
 )
 from models.quest import QuestCreate
 
@@ -37,10 +37,21 @@ def complete(quest_id: str = Body(..., embed=True)):
 
 @router.patch("/{quest_id}/status")
 def set_status(quest_id: str, status: str = Body(..., embed=True)):
-    valid = {"Open", "Taken", "In Progress", "Done", "Approved", "Stopped", "Cancelled"}
+    valid = {"Open", "Taken", "In Progress", "Done", "Approved", "Stopped", "Cancelled", "ממתין"}
     if status not in valid:
         raise HTTPException(status_code=400, detail="Invalid status")
     result = update_quest_status(quest_id, status)
+    if not result:
+        raise HTTPException(status_code=404, detail="Quest not found")
+    return result
+
+
+@router.patch("/{quest_id}/priority")
+def set_priority(quest_id: str, priority: str = Body(..., embed=True)):
+    valid = {"גבוה", "רגיל", "נמוך"}
+    if priority not in valid:
+        raise HTTPException(status_code=400, detail="Invalid priority")
+    result = update_quest_priority(quest_id, priority)
     if not result:
         raise HTTPException(status_code=404, detail="Quest not found")
     return result

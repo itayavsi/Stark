@@ -1,7 +1,7 @@
 import type { Quest, QuestStatus } from '../types/domain';
 
 interface QuestView {
-  id: 'open' | 'done' | 'stopped';
+  id: 'open' | 'done' | 'stopped' | 'more';
   label: string;
   icon: string;
   statuses: readonly string[];
@@ -11,11 +11,13 @@ export const QUEST_VIEWS: readonly QuestView[] = [
   { id: 'open', label: 'פתוחות', icon: '📋', statuses: ['Open', 'Taken', 'In Progress'] },
   { id: 'done', label: 'הסתיימו', icon: '✅', statuses: ['Done', 'Approved'] },
   { id: 'stopped', label: 'הופסקו', icon: '⏸', statuses: ['Stopped', 'Cancelled'] },
+  { id: 'more', label: 'נוספות', icon: '⋯', statuses: ['New', 'ממתין', 'תעדוף נמוך'] },
 ] as const;
 
 export type QuestViewId = (typeof QUEST_VIEWS)[number]['id'];
 
 export const STATUS_LABELS: Record<string, string> = {
+  New: 'חדש',
   Open: 'פתוח',
   Taken: 'נלקח',
   'In Progress': 'בביצוע',
@@ -23,7 +25,17 @@ export const STATUS_LABELS: Record<string, string> = {
   Approved: 'מאושר',
   Stopped: 'הופסק',
   Cancelled: 'בוטל',
+  ממתין: 'ממתין',
 };
+
+export function isLowPriorityQuest(quest: Quest): boolean {
+  const priority = String(quest.priority ?? '').trim().toLowerCase();
+  return priority === 'נמוך' || priority === 'low' || priority === 'low priority';
+}
+
+export function isMoreQuest(quest: Quest): boolean {
+  return Boolean(quest.isNew) || quest.status === 'ממתין' || isLowPriorityQuest(quest);
+}
 
 export const ALL_QUEST_COLUMNS = ['#', 'כותרת', 'FT', 'סטטוס', 'תאריך', 'משתמש', 'תיאור', 'שנה'] as const;
 
@@ -82,12 +94,18 @@ export function getQuestStatusLabel(status: QuestStatus | string): string {
   return STATUS_LABELS[status] ?? status;
 }
 
+export function getQuestDisplayStatus(quest: Quest): QuestStatus | string {
+  return quest.isNew ? 'New' : quest.status;
+}
+
 export function filterQuests(quests: Quest[], viewId: QuestViewId, search: string): Quest[] {
   const currentView = getQuestView(viewId);
   const normalizedSearch = search.trim();
 
   return quests.filter((quest) => {
-    const matchesView = currentView.statuses.includes(quest.status);
+    const matchesView = viewId === 'more'
+      ? isMoreQuest(quest)
+      : !isMoreQuest(quest) && currentView.statuses.includes(quest.status);
     if (!matchesView) {
       return false;
     }

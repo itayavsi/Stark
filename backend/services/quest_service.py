@@ -42,7 +42,8 @@ def create_quest(data: dict):
         "id": str(uuid.uuid4()),
         "title": data.get("title", ""),
         "description": data.get("description", ""),
-        "status": "Open",
+        "status": data.get("status", "Open"),
+        "priority": data.get("priority", "רגיל"),
         "date": data.get("date") or today,
         "assigned_user": data.get("assigned_user"),
         "shapefile_path": data.get("shapefile_path"),
@@ -69,6 +70,10 @@ def update_quest_status(quest_id: str, status: str):
         return transform_external_quest(external_quest, status_override=status)
 
     return update_quest(quest_id, {"status": status})
+
+
+def update_quest_priority(quest_id: str, priority: str):
+    return update_quest(quest_id, {"priority": priority})
 
 
 def get_saved_quest_sort(group: str, view: str):

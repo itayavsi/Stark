@@ -1,6 +1,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
   type FormEvent,
@@ -15,8 +16,11 @@ import {
   ALL_QUEST_COLUMNS,
   QUEST_SORT_OPTIONS,
   QUEST_VIEWS,
+  getQuestDisplayStatus,
   getQuestStatusLabel,
   getQuestView,
+  isLowPriorityQuest,
+  isMoreQuest,
   reorderQuestList,
   sortQuestsByOption,
   sortQuests,
@@ -29,6 +33,7 @@ import QuestItem from './QuestItem';
 interface QuestPanelProps {
   quests: Quest[];
   loading: boolean;
+  latestNewQuests: Quest[];
   onRefresh: () => Promise<void> | void;
   onShowOnMap: (quest: Quest) => Promise<void> | void;
   onJumpToPoint: (point: LngLatPoint) => void;
@@ -39,12 +44,15 @@ interface QuestPanelProps {
 export default function QuestPanel({
   quests,
   loading,
+  latestNewQuests,
   onRefresh,
   onShowOnMap,
   onJumpToPoint,
   onLayerAdded,
   onOpenTable,
 }: QuestPanelProps) {
+  const [moreTab, setMoreTab] = useState<'new' | 'pending' | 'low'>('new');
+  const notificationTimeoutsRef = useRef<number[]>([]);
   const { user } = useAuth();
   const [view, setView] = useState<QuestViewId>('open');
   const [search, setSearch] = useState('');
@@ -54,6 +62,8 @@ export default function QuestPanel({
   const [newDesc, setNewDesc] = useState('');
   const [newYear, setNewYear] = useState(2026);
   const [newFt, setNewFt] = useState<FtOption>('FT1');
+  const [newStatus, setNewStatus] = useState<'Open' | 'ממתין'>('Open');
+  const [newPriority, setNewPriority] = useState<'גבוה' | 'רגיל' | 'נמוך'>('רגיל');
   const [showJump, setShowJump] = useState(false);
   const [jumpMode, setJumpMode] = useState<'utm' | 'dd'>('utm');
   const [jumpLat, setJumpLat] = useState('');
@@ -69,15 +79,39 @@ export default function QuestPanel({
     open: [],
     done: [],
     stopped: [],
+    more: [],
   });
   const [draggedQuestId, setDraggedQuestId] = useState<string | null>(null);
   const [savingSort, setSavingSort] = useState(false);
   const [sortStatus, setSortStatus] = useState('');
+  const [toastNotifications, setToastNotifications] = useState<Array<{ id: string; title: string }>>([]);
 
   const isLeader = user?.role === 'Team Leader';
   const currentView = getQuestView(view);
   const currentGroup = user?.group || 'לווינות';
-  const filtered = useMemo(() => filterQuests(quests, view, search), [quests, view, search]);
+  const newQuestCount = useMemo(() => quests.filter((quest) => quest.isNew).length, [quests]);
+  const pendingQuestCount = useMemo(
+    () => quests.filter((quest) => quest.status === 'ממתין' && !quest.isNew).length,
+    [quests]
+  );
+  const lowPriorityQuestCount = useMemo(
+    () => quests.filter((quest) => isLowPriorityQuest(quest) && !quest.isNew && quest.status !== 'ממתין').length,
+    [quests]
+  );
+  const filteredBase = useMemo(() => filterQuests(quests, view, search), [quests, view, search]);
+  const filtered = useMemo(() => {
+    if (view !== 'more') {
+      return filteredBase;
+    }
+
+    return filteredBase.filter((quest) => (
+      moreTab === 'new'
+        ? Boolean(quest.isNew)
+        : moreTab === 'pending'
+          ? quest.status === 'ממתין' && !quest.isNew
+          : isLowPriorityQuest(quest) && !quest.isNew && quest.status !== 'ממתין'
+    ));
+  }, [filteredBase, moreTab, view]);
   const sortedRows = useMemo(() => sortQuests(filtered, sortCol, sortDir), [filtered, sortCol, sortDir]);
   const orderedFiltered = useMemo(() => {
     const manualOrder = manualOrderByView[view] || [];
@@ -96,9 +130,40 @@ export default function QuestPanel({
   const manualSortDisabled = listSort !== 'manual';
 
   useEffect(() => {
+    return () => {
+      notificationTimeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
+    };
+  }, []);
+
+  useEffect(() => {
+    if (latestNewQuests.length === 0) {
+      return;
+    }
+
+    const entries = latestNewQuests.map((quest) => ({
+      id: `${quest.id}-${Date.now()}`,
+      title: quest.title,
+    }));
+
+    setToastNotifications((current) => [...entries, ...current].slice(0, 4));
+
+    entries.forEach((entry) => {
+      const timeoutId = window.setTimeout(() => {
+        setToastNotifications((current) => current.filter((notification) => notification.id !== entry.id));
+      }, 5500);
+      notificationTimeoutsRef.current.push(timeoutId);
+    });
+  }, [latestNewQuests]);
+
+  useEffect(() => {
     let cancelled = false;
 
     async function loadSavedSort() {
+      if (view === 'more') {
+        setSortStatus('');
+        return;
+      }
+
       try {
         const response = await getQuestSortOrder(currentGroup, view);
         if (cancelled) {
@@ -162,7 +227,7 @@ export default function QuestPanel({
   };
 
   const handleSaveSort = async () => {
-    if (!isLeader) {
+    if (!isLeader || view === 'more') {
       return;
     }
 
@@ -192,6 +257,8 @@ export default function QuestPanel({
       await createQuest({
         title: newTitle,
         description: newDesc,
+        status: newStatus,
+        priority: newPriority,
         year: newYear,
         ft: newFt,
         group: 'לווינות',
@@ -200,6 +267,8 @@ export default function QuestPanel({
       setNewDesc('');
       setNewYear(2026);
       setNewFt('FT1');
+      setNewStatus('Open');
+      setNewPriority('רגיל');
       setShowNew(false);
       await onRefresh();
     } catch {
@@ -212,7 +281,7 @@ export default function QuestPanel({
   const exportCSV = () => {
     const header = ALL_QUEST_COLUMNS.join(',');
     const rows   = sortedRows.map((q, i) =>
-      [i + 1, q.title, q.ft, getQuestStatusLabel(q.status), q.date, q.assigned_user || '', q.description || '', q.year]
+      [i + 1, q.title, q.ft, getQuestStatusLabel(getQuestDisplayStatus(q)), q.date, q.assigned_user || '', q.description || '', q.year]
         .map(v => `"${String(v||'').replace(/"/g,'""')}"`)
         .join(',')
     ).join('\n');
@@ -271,10 +340,37 @@ export default function QuestPanel({
                 {QUEST_VIEWS.map(v => (
                   <button key={v.id}
                     style={{ ...FS.tab, ...(view === v.id ? FS.tabActive : {}) }}
-                    onClick={() => setView(v.id)}
+                    onClick={() => {
+                      setView(v.id);
+                      if (v.id === 'more') {
+                        setMoreTab('new');
+                      }
+                    }}
                   >{v.icon} {v.label}</button>
                 ))}
               </div>
+              {view === 'more' && (
+                <div style={FS.subtabs}>
+                  <button
+                    style={{ ...FS.subtab, ...(moreTab === 'new' ? FS.subtabActive : {}) }}
+                    onClick={() => setMoreTab('new')}
+                  >
+                    חדשות
+                  </button>
+                  <button
+                    style={{ ...FS.subtab, ...(moreTab === 'pending' ? FS.subtabActive : {}) }}
+                    onClick={() => setMoreTab('pending')}
+                  >
+                    ממתין
+                  </button>
+                  <button
+                    style={{ ...FS.subtab, ...(moreTab === 'low' ? FS.subtabActive : {}) }}
+                    onClick={() => setMoreTab('low')}
+                  >
+                    תעדוף נמוך
+                  </button>
+                </div>
+              )}
               <input
                 style={FS.search}
                 placeholder="🔍 חיפוש..."
@@ -317,9 +413,10 @@ export default function QuestPanel({
                         </span>
                       </td>
                       <td style={FS.td}>
-                        <span style={FS.statusBadge} data-status={q.status}>
-                          {getQuestStatusLabel(q.status)}
+                        <span style={FS.statusBadge} data-status={getQuestDisplayStatus(q)}>
+                          {getQuestDisplayStatus(q) === 'New' ? '🔔 חדש' : getQuestStatusLabel(getQuestDisplayStatus(q))}
                         </span>
+                        {isLowPriorityQuest(q) && <span style={FS.priorityBadge}>⋯ תעדוף נמוך</span>}
                       </td>
                       <td style={FS.td}>{q.date}</td>
                       <td style={FS.td}>{q.assigned_user || '—'}</td>
@@ -342,6 +439,7 @@ export default function QuestPanel({
                               Open: 'פתוח',
                               Taken: 'נלקח',
                               'In Progress': 'בביצוע',
+                              ממתין: 'ממתין',
                               Done: 'הושלם',
                               Approved: 'מאושר',
                               Stopped: 'הופסק',
@@ -379,12 +477,19 @@ export default function QuestPanel({
       {/* ── View tabs ─────────────────────────────────── */}
       <div style={S.tabs}>
         {QUEST_VIEWS.map(v => {
-          const cnt = quests.filter(q => v.statuses.includes(q.status)).length;
+          const cnt = v.id === 'more'
+            ? quests.filter((q) => isMoreQuest(q)).length
+            : quests.filter((q) => !isMoreQuest(q) && v.statuses.includes(q.status)).length;
           return (
             <button
               key={v.id}
               style={{ ...S.tab, ...(view === v.id ? S.tabActive : {}) }}
-              onClick={() => setView(v.id)}
+              onClick={() => {
+                setView(v.id);
+                if (v.id === 'more') {
+                  setMoreTab('new');
+                }
+              }}
             >
               {v.icon} {v.label}
               {cnt > 0 && <span style={{ ...S.tabCount, ...(view === v.id ? S.tabCountActive : {}) }}>{cnt}</span>}
@@ -393,12 +498,53 @@ export default function QuestPanel({
         })}
       </div>
 
+      {view === 'more' && (
+        <div style={S.moreTabs}>
+          <button
+            type="button"
+            style={{ ...S.moreTabButton, ...(moreTab === 'new' ? S.moreTabButtonActive : {}) }}
+            onClick={() => setMoreTab('new')}
+          >
+            חדשות
+            {newQuestCount > 0 && <span style={S.moreTabCount}>{newQuestCount}</span>}
+          </button>
+          <button
+            type="button"
+            style={{ ...S.moreTabButton, ...(moreTab === 'pending' ? S.moreTabButtonActive : {}) }}
+            onClick={() => setMoreTab('pending')}
+          >
+            ממתין
+            {pendingQuestCount > 0 && <span style={S.moreTabCount}>{pendingQuestCount}</span>}
+          </button>
+          <button
+            type="button"
+            style={{ ...S.moreTabButton, ...(moreTab === 'low' ? S.moreTabButtonActive : {}) }}
+            onClick={() => setMoreTab('low')}
+          >
+            תעדוף נמוך
+            {lowPriorityQuestCount > 0 && <span style={S.moreTabCount}>{lowPriorityQuestCount}</span>}
+          </button>
+        </div>
+      )}
+
       {/* ── Header ────────────────────────────────────── */}
       <div style={S.header}>
         <div style={S.headerRow}>
           <span style={S.title}>{currentView.icon} {currentView.label}</span>
           <div style={S.headerActions}>
             <span style={S.countBadge}>{filtered.length}</span>
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => {
+                setView('more');
+                setMoreTab('new');
+              }}
+              title="משימות חדשות"
+              style={newQuestCount > 0 ? S.bellButtonActive : undefined}
+            >
+              🔔
+              {newQuestCount > 0 && <span style={S.bellCount}>{newQuestCount}</span>}
+            </button>
             <button className="btn btn-ghost btn-sm" onClick={() => setShowJump((current) => !current)} title="קפיצה לנקודה">
               {showJump ? '✕ סגור' : '📍 קפוץ'}
             </button>
@@ -425,6 +571,17 @@ export default function QuestPanel({
               </select>
               <select className="input" value={newFt} onChange={e => setNewFt(e.target.value as FtOption)} style={{ fontSize: 13, flex: 1 }}>
                 {FT_OPTIONS.map(ft => <option key={ft} value={ft}>{ft}</option>)}
+              </select>
+              <select className="input" value={newStatus} onChange={e => setNewStatus(e.target.value as 'Open' | 'ממתין')} style={{ fontSize: 13, flex: 1 }}>
+                <option value="Open">פתוח</option>
+                <option value="ממתין">ממתין</option>
+              </select>
+            </div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <select className="input" value={newPriority} onChange={e => setNewPriority(e.target.value as 'גבוה' | 'רגיל' | 'נמוך')} style={{ fontSize: 13, flex: 1 }}>
+                <option value="גבוה">תעדוף גבוה</option>
+                <option value="רגיל">תעדוף רגיל</option>
+                <option value="נמוך">תעדוף נמוך</option>
               </select>
               <button className="btn btn-primary" type="submit" disabled={creating || !newTitle.trim()}>
                 {creating ? '...' : 'צור'}
@@ -538,7 +695,7 @@ export default function QuestPanel({
           >
             {listSortDir === 'asc' ? '↑' : '↓'}
           </button>
-          {isLeader && listSort === 'manual' && (
+          {isLeader && view !== 'more' && listSort === 'manual' && (
             <button
               className="btn btn-primary btn-sm"
               type="button"
@@ -600,6 +757,26 @@ export default function QuestPanel({
         <span style={S.footerText}>{filtered.length} / {quests.length} משימות</span>
       </div>
 
+      {toastNotifications.length > 0 && (
+        <div style={S.notifications}>
+          {toastNotifications.map((notification) => (
+            <button
+              key={notification.id}
+              type="button"
+              style={S.notificationToast}
+              onClick={() => {
+                setView('more');
+                setMoreTab('new');
+                setToastNotifications((current) => current.filter((entry) => entry.id !== notification.id));
+              }}
+            >
+              <span style={S.notificationIcon}>🔔</span>
+              <span style={S.notificationText}>New quest: {notification.title}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
     </div>
   );
 }
@@ -621,11 +798,59 @@ const S: Record<string, CSSProperties> = {
     borderRadius:20, background:'var(--surface2)', color:'var(--text3)',
   },
   tabCountActive: { background:'rgba(79,127,255,0.2)', color:'var(--accent)' },
+  moreTabs: {
+    display:'flex',
+    gap:8,
+    padding:'8px 12px',
+    borderBottom:'1px solid var(--border)',
+    background:'var(--surface2)',
+  },
+  moreTabButton: {
+    display:'inline-flex',
+    alignItems:'center',
+    gap:6,
+    padding:'6px 12px',
+    borderRadius:999,
+    border:'1px solid var(--border)',
+    background:'transparent',
+    color:'var(--text2)',
+    cursor:'pointer',
+    fontFamily:'var(--font)',
+    fontSize:12,
+    fontWeight:700,
+  },
+  moreTabButtonActive: {
+    borderColor:'var(--accent)',
+    background:'rgba(79,127,255,0.12)',
+    color:'var(--text)',
+  },
+  moreTabCount: {
+    fontSize:10,
+    fontWeight:800,
+    padding:'1px 6px',
+    borderRadius:99,
+    background:'rgba(255,255,255,0.08)',
+    color:'inherit',
+  },
   header:  { flexShrink:0, padding:'10px 12px 8px', borderBottom:'1px solid var(--border)', display:'flex', flexDirection:'column', gap:8 },
   headerRow: { display:'flex', justifyContent:'space-between', alignItems:'center' },
   headerActions: { display:'flex', alignItems:'center', gap:5 },
   title:   { fontSize:13, fontWeight:700, color:'var(--text)' },
   countBadge: { background:'rgba(79,127,255,0.15)', color:'var(--accent)', borderRadius:20, fontSize:11, fontWeight:700, padding:'1px 8px' },
+  bellButtonActive: { borderColor:'rgba(245, 158, 11, 0.4)', background:'rgba(245, 158, 11, 0.12)', color:'var(--gold)' },
+  bellCount: {
+    display:'inline-flex',
+    alignItems:'center',
+    justifyContent:'center',
+    minWidth:18,
+    height:18,
+    padding:'0 5px',
+    borderRadius:99,
+    background:'var(--gold)',
+    color:'#1f1605',
+    fontSize:10,
+    fontWeight:800,
+  },
   newForm: { display:'flex', flexDirection:'column', gap:6, background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:10 },
   jumpForm: { display:'flex', flexDirection:'column', gap:8, background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:10 },
   jumpHeader: { fontSize:12, fontWeight:700, color:'var(--text)' },
@@ -645,6 +870,32 @@ const S: Record<string, CSSProperties> = {
   empty:   { textAlign:'center', color:'var(--text3)', fontSize:13, padding:'40px 0' },
   footer:  { flexShrink:0, padding:'7px 12px', borderTop:'1px solid var(--border)', display:'flex', justifyContent:'center' },
   footerText: { fontSize:11, color:'var(--text3)' },
+  notifications: {
+    position:'fixed',
+    right:20,
+    bottom:20,
+    display:'flex',
+    flexDirection:'column',
+    gap:10,
+    zIndex:2100,
+    maxWidth:320,
+  },
+  notificationToast: {
+    display:'flex',
+    alignItems:'center',
+    gap:10,
+    width:'100%',
+    padding:'12px 14px',
+    borderRadius:14,
+    border:'1px solid rgba(245, 158, 11, 0.28)',
+    background:'rgba(25, 23, 16, 0.96)',
+    boxShadow:'0 12px 30px rgba(0,0,0,0.28)',
+    color:'#fff4d6',
+    cursor:'pointer',
+    textAlign:'left',
+  },
+  notificationIcon: { fontSize:16, flexShrink:0 },
+  notificationText: { fontSize:12, fontWeight:600, lineHeight:1.4 },
 };
 
 // ── Fullscreen / Excel styles ─────────────────────────────────
@@ -673,6 +924,7 @@ const FS: Record<string, CSSProperties> = {
   title:  { fontSize:15, fontWeight:700, color:'var(--text)' },
   count:  { background:'rgba(79,127,255,0.15)', color:'var(--accent)', borderRadius:20, fontSize:11, fontWeight:700, padding:'2px 10px' },
   tabs:   { display:'flex', gap:4 },
+  subtabs: { display:'flex', gap:6 },
   tab: {
     padding:'4px 12px', borderRadius:20, fontSize:12, fontWeight:600,
     background:'var(--surface2)', border:'1px solid var(--border)',
@@ -680,6 +932,22 @@ const FS: Record<string, CSSProperties> = {
     transition:'all 0.15s',
   },
   tabActive: { background:'var(--accent)', color:'#fff', borderColor:'var(--accent)' },
+  subtab: {
+    padding:'4px 10px',
+    borderRadius:999,
+    border:'1px solid var(--border)',
+    background:'transparent',
+    color:'var(--text2)',
+    cursor:'pointer',
+    fontFamily:'var(--font)',
+    fontSize:11,
+    fontWeight:700,
+  },
+  subtabActive: {
+    borderColor:'var(--accent)',
+    background:'rgba(79,127,255,0.12)',
+    color:'var(--text)',
+  },
   search: {
     background:'var(--surface2)', border:'1px solid var(--border)',
     borderRadius:6, color:'var(--text)', padding:'5px 10px',
@@ -708,6 +976,17 @@ const FS: Record<string, CSSProperties> = {
   },
   ftBadge: { fontSize:11, fontWeight:700, padding:'2px 8px', borderRadius:20 },
   statusBadge: { fontSize:11, fontWeight:600, padding:'2px 8px', borderRadius:20, background:'rgba(255,255,255,0.07)', color:'var(--text2)' },
+  priorityBadge: {
+    display:'inline-flex',
+    marginInlineStart:8,
+    fontSize:10,
+    fontWeight:700,
+    padding:'2px 8px',
+    borderRadius:20,
+    background:'rgba(148, 163, 184, 0.16)',
+    color:'#d8e1ef',
+    border:'1px solid rgba(148, 163, 184, 0.24)',
+  },
   select: {
     fontSize:11, padding:'3px 6px',
     background:'var(--surface)', border:'1px solid var(--border)',
