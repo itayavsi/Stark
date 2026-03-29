@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState, type ChangeEvent, type CSSProperties, type MouseEvent } from 'react';
-import { takeQuest, setQuestPriority, setQuestStatus, uploadShapefile, getLayerData } from '../services/api';
+import {
+  getLayerData,
+  setQuestPriority,
+  setQuestStatus,
+  takeQuest,
+  transferExternalQuestToOpen,
+  uploadShapefile,
+} from '../services/api';
 import { ftColor } from '../services/ftConfig';
 import type { AppLayer, Quest, User } from '../types/domain';
 import { getQuestDisplayStatus, isLowPriorityQuest } from '../utils/quests';
@@ -48,6 +55,9 @@ export default function QuestItem({
   const status = STATUS_MAP[displayStatus as keyof typeof STATUS_MAP] || { label: displayStatus, cls: 'badge-open' };
   const ftClr = ftColor(quest.ft);
   const lowPriority = isLowPriorityQuest(quest);
+  const isExternalQuest = quest.id.startsWith('external:');
+  const canTransferToOpen = isExternalQuest && !quest.isTransferred && !isViewer;
+  const matziahLabel = quest.matziah ? `מצייח ${quest.matziah}` : null;
 
   useEffect(() => {
     return () => {
@@ -91,6 +101,19 @@ export default function QuestItem({
       await onRefresh();
     } catch {
       showMsg('✗ שגיאה בעדכון סטטוס', 'error');
+    }
+    setBusy(false);
+  };
+
+  const handleTransferToOpen = async (e: MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    setBusy(true);
+    try {
+      await transferExternalQuestToOpen(quest.id);
+      showMsg('✓ המשימה הועברה למאגר המשימות הפתוחות', 'success');
+      await onRefresh();
+    } catch {
+      showMsg('✗ שגיאה בהעברת המשימה למאגר הפתוחות', 'error');
     }
     setBusy(false);
   };
@@ -201,6 +224,7 @@ export default function QuestItem({
         <div style={S.topLeft}>
           <span className={`badge ${status.cls}`}>{status.label}</span>
           {lowPriority && <span style={S.priorityBadge}>⋯ תעדוף נמוך</span>}
+          {matziahLabel && <span style={S.syncBadge}>{matziahLabel}</span>}
           {!quest.ft && quest.year && <span style={{ fontSize:11, color: ftClr, fontWeight:700 }}>{quest.year}</span>}
           {quest.ft && <span style={{ ...S.ftBadge, background: ftClr + '22', color: ftClr, border: `1px solid ${ftClr}55` }}>{quest.ft}</span>}
         </div>
@@ -221,6 +245,15 @@ export default function QuestItem({
         <div style={S.expanded} onClick={e => e.stopPropagation()}>
 
           {quest.description && <p style={S.desc}>{quest.description}</p>}
+          {quest.sync_external_id && (
+            <div style={S.syncHint}>
+              {quest.matziah === 'N'
+                ? 'סטטוס מסונכרן גם למשימה החיצונית'
+                : isExternalQuest
+                  ? 'סטטוס מקומי בלבד עד שמצייח יעבור ל-N'
+                  : 'המשימה מקושרת למקור חיצוני ללא סנכרון סטטוס אוטומטי'}
+            </div>
+          )}
 
           {/* Message bar */}
           {msg.text && (
@@ -233,7 +266,7 @@ export default function QuestItem({
           <div style={S.actions}>
 
             {/* Take quest */}
-            {quest.status === 'Open' && !isViewer && (
+            {quest.status === 'Open' && !isViewer && !isExternalQuest && (
               <button className="btn btn-success btn-sm" onClick={handleTake} disabled={busy}>
                 ✋ קח משימה
               </button>
@@ -244,15 +277,25 @@ export default function QuestItem({
               🗺 במפה
             </button>
 
+            {canTransferToOpen && (
+              <button className="btn btn-primary btn-sm" onClick={handleTransferToOpen} disabled={busy}>
+                Transfer to Open Quest
+              </button>
+            )}
+
+            {isExternalQuest && quest.isTransferred && (
+              <span style={S.transferState}>כבר הועבר למאגר הפתוחות</span>
+            )}
+
             {/* Check folder */}
-            {!isViewer && (
+            {!isViewer && !isExternalQuest && (
               <button className="btn btn-ghost btn-sm" onClick={handleCheckFolder} disabled={busy}>
                 📁 בדוק תיקייה
               </button>
             )}
 
             {/* Upload SHP/ZIP/GeoJSON */}
-            {!isViewer && quest.status !== 'Approved' && (
+            {!isViewer && !isExternalQuest && quest.status !== 'Approved' && (
               <label
                 className="btn btn-ghost btn-sm"
                 style={{ cursor: uploadProgress ? 'wait' : 'pointer' }}
@@ -376,5 +419,24 @@ const S: Record<string, CSSProperties> = {
     marginTop:8, fontSize:10, color:'var(--text3)',
     background:'var(--surface)', borderRadius:4,
     padding:'3px 8px', fontFamily:'monospace', wordBreak:'break-all',
+  },
+  syncBadge: {
+    fontSize: 10,
+    fontWeight: 700,
+    padding: '2px 8px',
+    borderRadius: 20,
+    background: 'rgba(79,127,255,0.12)',
+    color: 'var(--accent)',
+    border: '1px solid rgba(79,127,255,0.28)',
+  },
+  syncHint: {
+    fontSize: 11,
+    color: 'var(--text3)',
+    marginBottom: 10,
+  },
+  transferState: {
+    fontSize: 11,
+    color: 'var(--green)',
+    alignSelf: 'center',
   },
 };

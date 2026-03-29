@@ -90,24 +90,87 @@ def init_db() -> None:
             )
             cur.execute(
                 """
-                CREATE TABLE IF NOT EXISTS quest_sort_orders (
-                    group_name TEXT NOT NULL,
-                    view_name TEXT NOT NULL,
-                    order_data JSONB NOT NULL DEFAULT '[]'::jsonb,
-                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                    PRIMARY KEY (group_name, view_name)
+                ALTER TABLE quests
+                ADD COLUMN IF NOT EXISTS "מצייח" TEXT NOT NULL DEFAULT 'H';
+                """
+            )
+            cur.execute(
+                """
+                ALTER TABLE quests
+                ADD COLUMN IF NOT EXISTS sync_external_id TEXT NULL;
+                """
+            )
+            cur.execute(
+                """
+                ALTER TABLE quests
+                ADD COLUMN IF NOT EXISTS sync_source TEXT NULL;
+                """
+            )
+            cur.execute(
+                """
+                ALTER TABLE quests
+                ADD COLUMN IF NOT EXISTS sync_name TEXT NULL;
+                """
+            )
+            cur.execute(
+                """
+                CREATE UNIQUE INDEX IF NOT EXISTS quests_sync_external_id_unique
+                ON quests (sync_external_id)
+                WHERE sync_external_id IS NOT NULL;
+                """
+            )
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS external_quests (
+                    external_id TEXT PRIMARY KEY,
+                    payload JSONB NOT NULL,
+                    matziah TEXT NOT NULL DEFAULT 'N',
+                    local_status TEXT NULL,
+                    transferred_quest_id UUID NULL,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
                 );
                 """
             )
             cur.execute(
                 """
-                CREATE TABLE IF NOT EXISTS external_quest_overrides (
-                    external_id TEXT PRIMARY KEY,
-                    local_status TEXT NOT NULL,
-                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-                );
+                DO $$
+                BEGIN
+                    IF EXISTS (
+                        SELECT 1
+                        FROM information_schema.tables
+                        WHERE table_schema = 'public' AND table_name = 'external_quest_entries'
+                    ) THEN
+                        INSERT INTO external_quests (
+                            external_id, payload, matziah, local_status, transferred_quest_id, created_at, updated_at
+                        )
+                        SELECT
+                            entries.external_id,
+                            entries.payload,
+                            COALESCE(metadata.matziah, 'N') AS matziah,
+                            overrides.local_status,
+                            metadata.transferred_quest_id,
+                            COALESCE(entries.created_at, NOW()),
+                            NOW()
+                        FROM external_quest_entries AS entries
+                        LEFT JOIN external_quest_metadata AS metadata ON metadata.external_id = entries.external_id
+                        LEFT JOIN external_quest_overrides AS overrides ON overrides.external_id = entries.external_id
+                        ON CONFLICT (external_id)
+                        DO UPDATE SET
+                            payload = EXCLUDED.payload,
+                            matziah = EXCLUDED.matziah,
+                            local_status = COALESCE(EXCLUDED.local_status, external_quests.local_status),
+                            transferred_quest_id = COALESCE(EXCLUDED.transferred_quest_id, external_quests.transferred_quest_id),
+                            updated_at = NOW();
+                    END IF;
+                END
+                $$;
                 """
             )
+            cur.execute("DROP TABLE IF EXISTS quest_sort_orders;")
+            cur.execute("DROP TABLE IF EXISTS external_quest_overrides;")
+            cur.execute("DROP TABLE IF EXISTS external_quest_metadata;")
+            cur.execute("DROP TABLE IF EXISTS external_quest_entries;")
 
             cur.execute("SELECT COUNT(*) AS count FROM users;")
             users_count = cur.fetchone()["count"]

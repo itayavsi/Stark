@@ -8,7 +8,8 @@ import {
 } from 'react';
 
 import { useAuth } from '../context/AuthContext';
-import { createQuest, getQuestSortOrder, saveQuestSortOrder, setQuestStatus } from '../services/api';
+import { getStoredQuestSortOrder, saveStoredQuestSortOrder } from '../lib/questSortStorage';
+import { createQuest, setQuestStatus } from '../services/api';
 import { FT_OPTIONS, ftColor } from '../services/ftConfig';
 import type { AppLayer, FtOption, LngLatPoint, Quest } from '../types/domain';
 import { parseUTM } from '../utils/geo';
@@ -170,13 +171,13 @@ export default function QuestPanel({
       }
 
       try {
-        const response = await getQuestSortOrder(currentGroup, view);
+        const questIds = getStoredQuestSortOrder(currentGroup, view);
         if (cancelled) {
           return;
         }
         setManualOrderByView((current) => ({
           ...current,
-          [view]: response.quest_ids,
+          [view]: questIds,
         }));
       } catch {
         if (!cancelled) {
@@ -238,10 +239,10 @@ export default function QuestPanel({
 
     setSavingSort(true);
     try {
-      const response = await saveQuestSortOrder(currentGroup, view, displayedQuests.map((quest) => quest.id));
+      const questIds = saveStoredQuestSortOrder(currentGroup, view, displayedQuests.map((quest) => quest.id));
       setManualOrderByView((current) => ({
         ...current,
-        [view]: response.quest_ids,
+        [view]: questIds,
       }));
       setSortStatus('המיון נשמר');
     } catch {

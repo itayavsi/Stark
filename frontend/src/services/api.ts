@@ -2,11 +2,11 @@ import axios from 'axios';
 
 import { getStoredToken } from '../lib/session';
 import type {
+  CreateExternalQuestInput,
   CreateQuestInput,
   LayerDataResponse,
   LoginResponse,
   Quest,
-  QuestSortOrderResponse,
   ResolveShpFolderResponse,
   UploadShapefileResponse,
   User,
@@ -40,17 +40,25 @@ export const getQuests = (params: Record<string, string | number> = {}) =>
 export const createQuest = (data: CreateQuestInput) =>
   api.post<Quest>('/quests/', data).then((response) => response.data);
 
+export const createExternalQuest = (data: CreateExternalQuestInput) =>
+  api.post<Quest>('/quests/external', data).then((response) => response.data);
+
 export const takeQuest = (questId: string, username: string) =>
   api.post('/quests/take', { quest_id: questId, username }).then((response) => response.data);
 
 export const completeQuest = (questId: string) =>
   api.post('/quests/complete', { quest_id: questId }).then((response) => response.data);
 
+const encodeQuestId = (questId: string) => encodeURIComponent(questId);
+
 export const setQuestStatus = (questId: string, status: string) =>
-  api.patch(`/quests/${questId}/status`, { status }).then((response) => response.data);
+  api.patch(`/quests/${encodeQuestId(questId)}/status`, { status }).then((response) => response.data);
 
 export const setQuestPriority = (questId: string, priority: string) =>
-  api.patch(`/quests/${questId}/priority`, { priority }).then((response) => response.data);
+  api.patch(`/quests/${encodeQuestId(questId)}/priority`, { priority }).then((response) => response.data);
+
+export const transferExternalQuestToOpen = (questId: string) =>
+  api.post<Quest>(`/quests/${encodeQuestId(questId)}/transfer-to-open`).then((response) => response.data);
 
 export const uploadShapefile = (questId: string, file: File) => {
   const fd = new FormData();
@@ -68,16 +76,6 @@ export const checkFolder = (path: string) =>
 export const resolveShpFolder = (path: string) =>
   api
     .get<ResolveShpFolderResponse>('/shapefiles/resolve-shp-folder', { params: { path } })
-    .then((response) => response.data);
-
-export const getQuestSortOrder = (group: string, view: string) =>
-  api
-    .get<QuestSortOrderResponse>('/quests/sort-order', { params: { group, view } })
-    .then((response) => response.data);
-
-export const saveQuestSortOrder = (group: string, view: string, questIds: string[]) =>
-  api
-    .post<QuestSortOrderResponse>('/quests/sort-order', { group, view, quest_ids: questIds })
     .then((response) => response.data);
 
 export const getUsers = () =>

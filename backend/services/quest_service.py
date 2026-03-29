@@ -1,43 +1,40 @@
 import uuid
 from datetime import datetime
+
 from services.external_quest_service import (
+    build_external_id,
+    create_external_quest,
     fetch_external_quests,
     find_external_quest,
+    map_local_status_to_external,
     sync_external_status,
-    transform_external_quest,
+    transform_external_quest_with_metadata,
 )
 from services.storage import (
-    get_external_status_overrides,
+    get_external_quest,
+    get_quest_by_sync_external_id,
     get_quest_by_id,
-    get_quest_sort_order,
     get_quests,
+    save_external_quest,
     save_quest,
-    save_external_status_override,
-    save_quest_sort_order,
+    update_external_quest_status,
     update_quest,
 )
 
-def get_all_quests():
-    local_quests = get_quests()
-    try:
-        external_items = fetch_external_quests()
-        external_ids = [transform_external_quest(item)["id"] for item in external_items]
-        overrides = get_external_status_overrides(external_ids)
-        external_quests = [
-            transform_external_quest(item, status_override=overrides.get(transform_external_quest(item)["id"]))
-            for item in external_items
-        ]
-    except Exception:
-        external_quests = []
 
-    return [*local_quests, *external_quests]
+VALID_MATZIAH = {"N", "H", "M"}
 
 
-def get_quest(quest_id: str):
-    return get_quest_by_id(quest_id)
+def _normalize_matziah(value: str | None, default: str) -> str:
+    normalized = str(value or "").strip().upper()
+    if normalized in VALID_MATZIAH:
+        return normalized
+    return default
 
-def create_quest(data: dict):
+
+def _build_local_quest_payload(data: dict, default_matziah: str = "H") -> dict:
     today = datetime.now().strftime("%Y-%m-%d")
+    sync_external_id = data.get("sync_external_id")
     quest = {
         "id": str(uuid.uuid4()),
         "title": data.get("title", ""),
@@ -50,24 +47,169 @@ def create_quest(data: dict):
         "group": data.get("group", "לווינות"),
         "year": data.get("year", datetime.now().year),
         "ft": data.get("ft", "FT1"),
+        "matziah": _normalize_matziah(
+            data.get("matziah"),
+            default="N" if sync_external_id and default_matziah == "H" else default_matziah,
+        ),
+        "sync_external_id": sync_external_id,
+        "sync_source": data.get("sync_source"),
+        "sync_name": data.get("sync_name"),
     }
+    return quest
+
+
+def _should_sync_external_status(quest: dict) -> bool:
+    return _normalize_matziah(quest.get("matziah"), default="H") == "N" and bool(quest.get("sync_name"))
+
+
+def get_all_quests():
+    local_quests = get_quests()
+    local_external_sync_ids = {
+        str(quest.get("sync_external_id"))
+        for quest in local_quests
+        if quest.get("sync_external_id")
+    }
+
+    try:
+        external_items = fetch_external_quests()
+        external_quests = []
+        for item in external_items:
+            external_id = build_external_id(item)
+            stored_external = get_external_quest(external_id)
+            if external_id in local_external_sync_ids:
+                continue
+            if stored_external and stored_external.get("transferred_quest_id"):
+                continue
+
+            external_quests.append(
+                transform_external_quest_with_metadata(
+                    item,
+                    status_override=stored_external.get("local_status") if stored_external else None,
+                    metadata=stored_external,
+                )
+            )
+    except Exception:
+        external_quests = []
+
+    return [*local_quests, *external_quests]
+
+
+def get_quest(quest_id: str):
+    return get_quest_by_id(quest_id)
+
+
+def create_quest(data: dict):
+    quest = _build_local_quest_payload(data, default_matziah="H")
     save_quest(quest)
     return quest
+
+
+def create_external_quest_entry(data: dict):
+    matziah = _normalize_matziah(data.get("matziah"), default="N")
+    external_item = create_external_quest({**data, "matziah": matziah})
+    external_id = build_external_id(external_item)
+    stored_external = save_external_quest(external_id, external_item, matziah=matziah)
+    return transform_external_quest_with_metadata(external_item, metadata=stored_external)
+
+
+def transfer_external_quest_to_local(quest_id: str):
+    existing_local_quest = get_quest_by_sync_external_id(quest_id)
+    if existing_local_quest is not None:
+        stored_external = get_external_quest(quest_id)
+        if stored_external is not None:
+            save_external_quest(
+                quest_id,
+                stored_external,
+                matziah=_normalize_matziah(existing_local_quest.get("matziah"), default="N"),
+                local_status=stored_external.get("local_status"),
+                transferred_quest_id=existing_local_quest["id"],
+            )
+        return existing_local_quest
+
+    external_quest = find_external_quest(quest_id)
+    if external_quest is None:
+        return None
+
+    stored_external = get_external_quest(quest_id)
+    transformed_external = transform_external_quest_with_metadata(
+        external_quest,
+        status_override=stored_external.get("local_status") if stored_external else None,
+        metadata=stored_external,
+    )
+    local_quest = create_quest(
+        {
+            "title": transformed_external["title"],
+            "description": transformed_external["description"],
+            "status": transformed_external["status"],
+            "priority": transformed_external["priority"],
+            "date": transformed_external["date"],
+            "assigned_user": transformed_external["assigned_user"],
+            "group": transformed_external["group"],
+            "year": transformed_external["year"],
+            "ft": transformed_external["ft"],
+            "matziah": transformed_external["matziah"],
+            "sync_external_id": transformed_external["sync_external_id"],
+            "sync_source": transformed_external["sync_source"],
+            "sync_name": transformed_external["sync_name"],
+        }
+    )
+    save_external_quest(
+        quest_id,
+        external_quest,
+        matziah=transformed_external["matziah"],
+        local_status=stored_external.get("local_status") if stored_external else None,
+        transferred_quest_id=local_quest["id"],
+    )
+    return local_quest
+
 
 def take_quest(quest_id: str, username: str):
     return update_quest(quest_id, {"status": "Taken", "assigned_user": username})
 
+
 def complete_quest(quest_id: str):
     return update_quest(quest_id, {"status": "Done"})
+
 
 def update_quest_status(quest_id: str, status: str):
     if quest_id.startswith("external:"):
         external_quest = find_external_quest(quest_id)
         if external_quest is None:
             return None
-        sync_external_status(str(external_quest.get("name", "")), status)
-        save_external_status_override(quest_id, status)
-        return transform_external_quest(external_quest, status_override=status)
+
+        stored_external = get_external_quest(quest_id)
+        external_status = map_local_status_to_external(status)
+        matziah = _normalize_matziah(
+            stored_external.get("matziah") if stored_external else None,
+            default="N",
+        )
+        if matziah == "N" and str(external_quest.get("source", "kipod") or "kipod") != "local-fallback":
+            sync_external_status(str(external_quest.get("name", "")), status)
+
+        saved_external = save_external_quest(
+            quest_id,
+            {**external_quest, "status": external_status},
+            matziah=matziah,
+            local_status=status,
+            transferred_quest_id=stored_external.get("transferred_quest_id") if stored_external else None,
+        )
+        return transform_external_quest_with_metadata(
+            {**external_quest, "status": external_status},
+            status_override=status,
+            metadata=saved_external,
+        )
+
+    current_quest = get_quest(quest_id)
+    if current_quest is None:
+        return None
+
+    if _should_sync_external_status(current_quest):
+        external_status = map_local_status_to_external(status)
+        if current_quest.get("sync_source") != "local-fallback":
+            sync_external_status(str(current_quest.get("sync_name", "")), status)
+        sync_external_id = current_quest.get("sync_external_id")
+        if sync_external_id:
+            update_external_quest_status(sync_external_id, external_status, status)
 
     return update_quest(quest_id, {"status": status})
 
@@ -77,8 +219,8 @@ def update_quest_priority(quest_id: str, priority: str):
 
 
 def get_saved_quest_sort(group: str, view: str):
-    return get_quest_sort_order(group, view)
+    return []
 
 
 def save_saved_quest_sort(group: str, view: str, quest_ids: list[str]):
-    return save_quest_sort_order(group, view, quest_ids)
+    return [str(quest_id) for quest_id in quest_ids]

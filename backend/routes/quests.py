@@ -1,10 +1,25 @@
-from fastapi import APIRouter, HTTPException, Body
-from services.quest_service import (
-    get_all_quests, create_quest, take_quest,
-    complete_quest, update_quest_status, get_saved_quest_sort,
-    save_saved_quest_sort, update_quest_priority
+import httpx
+from fastapi import APIRouter, Body, HTTPException
+
+from models.quest import (
+    ExternalQuestCreate,
+    MATZIAH_OPTIONS,
+    PRIORITY_OPTIONS,
+    QuestCreate,
+    STATUS_OPTIONS,
 )
-from models.quest import QuestCreate
+from services.quest_service import (
+    complete_quest,
+    create_external_quest_entry,
+    create_quest,
+    get_all_quests,
+    get_saved_quest_sort,
+    save_saved_quest_sort,
+    take_quest,
+    transfer_external_quest_to_local,
+    update_quest_priority,
+    update_quest_status,
+)
 
 router = APIRouter()
 
@@ -20,6 +35,32 @@ def list_quests(group: str = None, status: str = None):
 @router.post("/")
 def add_quest(quest: QuestCreate):
     return create_quest(quest.dict())
+
+
+@router.post("/external")
+def add_external_quest(quest: ExternalQuestCreate):
+    try:
+        return create_external_quest_entry(quest.dict())
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"External quest service error: {exc}") from exc
+
+
+@router.post("/{quest_id}/transfer-to-open")
+def transfer_to_open(quest_id: str):
+    if not quest_id.startswith("external:"):
+        raise HTTPException(status_code=400, detail="Only external quests can be transferred")
+
+    try:
+        result = transfer_external_quest_to_local(quest_id)
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"External quest service error: {exc}") from exc
+
+    if not result:
+        raise HTTPException(status_code=404, detail="Quest not found")
+    return result
+
 
 @router.post("/take")
 def take(quest_id: str = Body(..., embed=True), username: str = Body(..., embed=True)):
@@ -37,10 +78,15 @@ def complete(quest_id: str = Body(..., embed=True)):
 
 @router.patch("/{quest_id}/status")
 def set_status(quest_id: str, status: str = Body(..., embed=True)):
-    valid = {"Open", "Taken", "In Progress", "Done", "Approved", "Stopped", "Cancelled", "ממתין"}
+    valid = set(STATUS_OPTIONS)
     if status not in valid:
         raise HTTPException(status_code=400, detail="Invalid status")
-    result = update_quest_status(quest_id, status)
+
+    try:
+        result = update_quest_status(quest_id, status)
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"External quest service error: {exc}") from exc
+
     if not result:
         raise HTTPException(status_code=404, detail="Quest not found")
     return result
@@ -48,13 +94,18 @@ def set_status(quest_id: str, status: str = Body(..., embed=True)):
 
 @router.patch("/{quest_id}/priority")
 def set_priority(quest_id: str, priority: str = Body(..., embed=True)):
-    valid = {"גבוה", "רגיל", "נמוך"}
+    valid = set(PRIORITY_OPTIONS)
     if priority not in valid:
         raise HTTPException(status_code=400, detail="Invalid priority")
     result = update_quest_priority(quest_id, priority)
     if not result:
         raise HTTPException(status_code=404, detail="Quest not found")
     return result
+
+
+@router.get("/matziah-options")
+def get_matziah_options():
+    return {"options": MATZIAH_OPTIONS}
 
 
 @router.get("/sort-order")
