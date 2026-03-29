@@ -18,6 +18,8 @@ VALID_STATUSES = {"Open", "Taken", "In Progress", "Done", "Approved", "Stopped",
 DEFAULT_GROUP = "לווינות"
 DEFAULT_FT = "FT1"
 DEFAULT_STATUS = "Done"
+OPEN_QUESTS_TABLE = "open_quests"
+FINISHED_QUESTS_TABLE = "finished_quests"
 HEADER_ALIASES = {
     "title": {"title", "quest", "quest_title", "name", "שם", "כותרת"},
     "description": {"description", "details", "notes", "desc", "תיאור", "הערות"},
@@ -47,7 +49,7 @@ class ImportRow:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Import completed quests from an Excel workbook into the quests table."
+        description="Import completed quests from an Excel workbook into the open_quests table."
     )
     parser.add_argument("workbook", help="Path to the .xlsx workbook to import.")
     parser.add_argument("--sheet", help="Worksheet name. Defaults to the active sheet.")
@@ -212,34 +214,39 @@ def _load_rows(args: argparse.Namespace) -> list[ImportRow]:
 
 
 def _quest_exists(cur: Any, quest: dict[str, Any]) -> bool:
-    cur.execute(
-        """
-        SELECT 1
-        FROM quests
-        WHERE title = %(title)s
-          AND date = %(date)s
-          AND COALESCE(assigned_user, '') = COALESCE(%(assigned_user)s, '')
-          AND group_name = %(group_name)s
-          AND year = %(year)s
-          AND ft = %(ft)s
-        LIMIT 1;
-        """,
-        {
-            "title": quest["title"],
-            "date": quest["date"],
-            "assigned_user": quest["assigned_user"],
-            "group_name": quest["group"],
-            "year": quest["year"],
-            "ft": quest["ft"],
-        },
-    )
-    return cur.fetchone() is not None
+    params = {
+        "title": quest["title"],
+        "date": quest["date"],
+        "assigned_user": quest["assigned_user"],
+        "group_name": quest["group"],
+        "year": quest["year"],
+        "ft": quest["ft"],
+    }
+    for table_name in (OPEN_QUESTS_TABLE, FINISHED_QUESTS_TABLE):
+        cur.execute(
+            f"""
+            SELECT 1
+            FROM {table_name}
+            WHERE title = %(title)s
+              AND date = %(date)s
+              AND COALESCE(assigned_user, '') = COALESCE(%(assigned_user)s, '')
+              AND group_name = %(group_name)s
+              AND year = %(year)s
+              AND ft = %(ft)s
+            LIMIT 1;
+            """,
+            params,
+        )
+        if cur.fetchone() is not None:
+            return True
+    return False
 
 
 def _insert_quest(cur: Any, quest: dict[str, Any]) -> None:
+    target_table = FINISHED_QUESTS_TABLE if quest.get("status") in {"Done", "Approved"} else OPEN_QUESTS_TABLE
     cur.execute(
-        """
-        INSERT INTO quests (
+        f"""
+        INSERT INTO {target_table} (
             id, title, description, status, "תעדוף", date, assigned_user,
             shapefile_path, group_name, year, ft
         )

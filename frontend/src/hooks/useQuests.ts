@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import {
+  getPendingQuestNotificationIds,
+  removePendingQuestNotificationIds,
+} from '../lib/pendingQuestNotifications';
 import { getQuests } from '../services/api';
 import type { Quest } from '../types/domain';
 
@@ -15,20 +19,26 @@ export function useQuests() {
     try {
       const nextQuests = await getQuests();
       const nextQuestIds = new Set(nextQuests.map((quest) => quest.id));
+      const pendingQuestNotificationIds = new Set(getPendingQuestNotificationIds());
+      const pendingNotificationQuests = nextQuests.filter((quest) => pendingQuestNotificationIds.has(quest.id));
       const detectedNewQuests = hasLoadedRef.current
         ? nextQuests.filter((quest) => !knownQuestIdsRef.current.has(quest.id))
         : [];
+      const latestNewQuestMap = new Map(
+        [...pendingNotificationQuests, ...detectedNewQuests].map((quest) => [quest.id, quest])
+      );
 
       const persistentNewIds = [...newQuestIdsRef.current].filter((questId) => {
         const quest = nextQuests.find((entry) => entry.id === questId);
         return Boolean(quest && (quest.status === 'Open' || quest.status === 'ממתין'));
       });
-      const mergedNewIds = new Set([...persistentNewIds, ...detectedNewQuests.map((quest) => quest.id)]);
+      const mergedNewIds = new Set([...persistentNewIds, ...latestNewQuestMap.keys()]);
 
       newQuestIdsRef.current = mergedNewIds;
       knownQuestIdsRef.current = nextQuestIds;
       hasLoadedRef.current = true;
-      setLatestNewQuests(detectedNewQuests);
+      setLatestNewQuests([...latestNewQuestMap.values()]);
+      removePendingQuestNotificationIds(pendingNotificationQuests.map((quest) => quest.id));
       setQuests(nextQuests.map((quest) => (
         mergedNewIds.has(quest.id)
           ? { ...quest, isNew: true }

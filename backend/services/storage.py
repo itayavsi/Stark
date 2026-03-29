@@ -3,6 +3,9 @@ from typing import Dict, List, Optional
 
 from services.db import get_connection
 
+OPEN_QUESTS_TABLE = "open_quests"
+FINISHED_QUESTS_TABLE = "finished_quests"
+
 
 def _normalize_user(row: Dict) -> Dict:
     return {
@@ -28,7 +31,28 @@ def _normalize_quest(row: Dict) -> Dict:
         "group": row["group_name"],
         "year": row["year"],
         "ft": row["ft"],
+        "matziah": row["matziah"],
+        "sync_external_id": row["sync_external_id"],
+        "sync_source": row["sync_source"],
+        "sync_name": row["sync_name"],
     }
+
+
+def _quest_columns() -> str:
+    return """
+        id, title, description, status, "תעדוף" AS priority, date, assigned_user,
+        shapefile_path, group_name, year, ft, "מצייח" AS matziah,
+        sync_external_id, sync_source, sync_name
+    """
+
+
+def _normalize_external_quest(row: Dict) -> Dict:
+    payload = dict(row["payload"] or {})
+    payload["external_id"] = str(row["external_id"])
+    payload["matziah"] = str(row["matziah"])
+    payload["local_status"] = str(row["local_status"]) if row["local_status"] else None
+    payload["transferred_quest_id"] = str(row["transferred_quest_id"]) if row["transferred_quest_id"] else None
+    return payload
 
 
 def get_users() -> List[Dict]:
@@ -121,11 +145,24 @@ def get_quests() -> List[Dict]:
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """
+                f"""
                 SELECT
-                    id, title, description, status, "תעדוף" AS priority, date, assigned_user,
-                    shapefile_path, group_name, year, ft
-                FROM quests
+                    {_quest_columns()}
+                FROM {OPEN_QUESTS_TABLE}
+                ORDER BY date DESC, title ASC;
+                """
+            )
+            return [_normalize_quest(row) for row in cur.fetchall()]
+
+
+def get_finished_quests() -> List[Dict]:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""
+                SELECT
+                    {_quest_columns()}
+                FROM {FINISHED_QUESTS_TABLE}
                 ORDER BY date DESC, title ASC;
                 """
             )
@@ -136,33 +173,75 @@ def get_quest_by_id(quest_id: str) -> Optional[Dict]:
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """
+                f"""
                 SELECT
-                    id, title, description, status, "תעדוף" AS priority, date, assigned_user,
-                    shapefile_path, group_name, year, ft
-                FROM quests
+                    {_quest_columns()}
+                FROM {OPEN_QUESTS_TABLE}
                 WHERE id = %(quest_id)s;
                 """,
                 {"quest_id": quest_id},
             )
             row = cur.fetchone()
             if row is None:
-                return None
+                cur.execute(
+                    f"""
+                    SELECT
+                        {_quest_columns()}
+                    FROM {FINISHED_QUESTS_TABLE}
+                    WHERE id = %(quest_id)s;
+                    """,
+                    {"quest_id": quest_id},
+                )
+                row = cur.fetchone()
+                if row is None:
+                    return None
+            return _normalize_quest(row)
+
+
+def get_quest_by_sync_external_id(external_id: str) -> Optional[Dict]:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""
+                SELECT
+                    {_quest_columns()}
+                FROM {OPEN_QUESTS_TABLE}
+                WHERE sync_external_id = %(external_id)s;
+                """,
+                {"external_id": external_id},
+            )
+            row = cur.fetchone()
+            if row is None:
+                cur.execute(
+                    f"""
+                    SELECT
+                        {_quest_columns()}
+                    FROM {FINISHED_QUESTS_TABLE}
+                    WHERE sync_external_id = %(external_id)s;
+                    """,
+                    {"external_id": external_id},
+                )
+                row = cur.fetchone()
+                if row is None:
+                    return None
             return _normalize_quest(row)
 
 
 def save_quest(quest: Dict):
+    target_table = FINISHED_QUESTS_TABLE if quest.get("status") in {"Done", "Approved"} else OPEN_QUESTS_TABLE
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """
-                INSERT INTO quests (
+                f"""
+                INSERT INTO {target_table} (
                     id, title, description, status, "תעדוף", date, assigned_user,
-                    shapefile_path, group_name, year, ft
+                    shapefile_path, group_name, year, ft, "מצייח",
+                    sync_external_id, sync_source, sync_name
                 )
                 VALUES (
                     %(id)s, %(title)s, %(description)s, %(status)s, %(priority)s, %(date)s, %(assigned_user)s,
-                    %(shapefile_path)s, %(group_name)s, %(year)s, %(ft)s
+                    %(shapefile_path)s, %(group_name)s, %(year)s, %(ft)s, %(matziah)s,
+                    %(sync_external_id)s, %(sync_source)s, %(sync_name)s
                 );
                 """,
                 {
@@ -177,6 +256,10 @@ def save_quest(quest: Dict):
                     "group_name": quest["group"],
                     "year": quest["year"],
                     "ft": quest["ft"],
+                    "matziah": quest.get("matziah", "H"),
+                    "sync_external_id": quest.get("sync_external_id"),
+                    "sync_source": quest.get("sync_source"),
+                    "sync_name": quest.get("sync_name"),
                 },
             )
 
@@ -196,6 +279,10 @@ def update_quest(quest_id: str, updates: Dict) -> Optional[Dict]:
         "group": "group_name",
         "year": "year",
         "ft": "ft",
+        "matziah": '"מצייח"',
+        "sync_external_id": "sync_external_id",
+        "sync_source": "sync_source",
+        "sync_name": "sync_name",
     }
     assignments = []
     params = {"quest_id": quest_id}
@@ -212,91 +299,179 @@ def update_quest(quest_id: str, updates: Dict) -> Optional[Dict]:
 
     with get_connection() as conn:
         with conn.cursor() as cur:
+            for table_name in (OPEN_QUESTS_TABLE, FINISHED_QUESTS_TABLE):
+                cur.execute(
+                    f"""
+                    UPDATE {table_name}
+                    SET {", ".join(assignments)}
+                    WHERE id = %(quest_id)s
+                    RETURNING
+                        {_quest_columns()};
+                    """,
+                    params,
+                )
+                row = cur.fetchone()
+                if row is not None:
+                    return _normalize_quest(row)
+            return None
+
+
+def move_quest(quest_id: str, destination_table: str, updates: Optional[Dict] = None) -> Optional[Dict]:
+    updates = updates or {}
+    source_table = FINISHED_QUESTS_TABLE if destination_table == OPEN_QUESTS_TABLE else OPEN_QUESTS_TABLE
+
+    allowed_fields = {
+        "title": "title",
+        "description": "description",
+        "status": "status",
+        "priority": "priority",
+        "date": "date",
+        "assigned_user": "assigned_user",
+        "shapefile_path": "shapefile_path",
+        "group": "group_name",
+        "year": "year",
+        "ft": "ft",
+        "matziah": "matziah",
+        "sync_external_id": "sync_external_id",
+        "sync_source": "sync_source",
+        "sync_name": "sync_name",
+    }
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
             cur.execute(
                 f"""
-                UPDATE quests
-                SET {", ".join(assignments)}
+                DELETE FROM {source_table}
                 WHERE id = %(quest_id)s
                 RETURNING
-                    id, title, description, status, "תעדוף" AS priority, date, assigned_user,
-                    shapefile_path, group_name, year, ft;
+                    {_quest_columns()};
                 """,
-                params,
+                {"quest_id": quest_id},
             )
             row = cur.fetchone()
             if row is None:
                 return None
-            return _normalize_quest(row)
+
+            quest = _normalize_quest(row)
+            for key, value in updates.items():
+                if key in allowed_fields:
+                    quest[key] = value
+
+            cur.execute(
+                f"""
+                INSERT INTO {destination_table} (
+                    id, title, description, status, "תעדוף", date, assigned_user,
+                    shapefile_path, group_name, year, ft, "מצייח",
+                    sync_external_id, sync_source, sync_name
+                )
+                VALUES (
+                    %(id)s, %(title)s, %(description)s, %(status)s, %(priority)s, %(date)s, %(assigned_user)s,
+                    %(shapefile_path)s, %(group)s, %(year)s, %(ft)s, %(matziah)s,
+                    %(sync_external_id)s, %(sync_source)s, %(sync_name)s
+                )
+                ON CONFLICT (id)
+                DO UPDATE SET
+                    title = EXCLUDED.title,
+                    description = EXCLUDED.description,
+                    status = EXCLUDED.status,
+                    "תעדוף" = EXCLUDED."תעדוף",
+                    date = EXCLUDED.date,
+                    assigned_user = EXCLUDED.assigned_user,
+                    shapefile_path = EXCLUDED.shapefile_path,
+                    group_name = EXCLUDED.group_name,
+                    year = EXCLUDED.year,
+                    ft = EXCLUDED.ft,
+                    "מצייח" = EXCLUDED."מצייח",
+                    sync_external_id = EXCLUDED.sync_external_id,
+                    sync_source = EXCLUDED.sync_source,
+                    sync_name = EXCLUDED.sync_name
+                RETURNING
+                    {_quest_columns()};
+                """,
+                quest,
+            )
+            return _normalize_quest(cur.fetchone())
 
 
-def get_quest_sort_order(group: str, view: str) -> List[str]:
+def get_external_quests() -> List[Dict]:
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT order_data
-                FROM quest_sort_orders
-                WHERE group_name = %(group_name)s AND view_name = %(view_name)s;
+                SELECT external_id, payload, matziah, local_status, transferred_quest_id
+                FROM external_quests
+                ORDER BY updated_at DESC, created_at DESC;
+                """
+            )
+            return [_normalize_external_quest(row) for row in cur.fetchall()]
+
+
+def get_external_quest(external_id: str) -> Optional[Dict]:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT external_id, payload, matziah, local_status, transferred_quest_id
+                FROM external_quests
+                WHERE external_id = %(external_id)s;
                 """,
-                {"group_name": group, "view_name": view},
+                {"external_id": external_id},
             )
             row = cur.fetchone()
             if row is None:
-                return []
-            return [str(quest_id) for quest_id in row["order_data"]]
+                return None
+            return _normalize_external_quest(row)
 
 
-def save_quest_sort_order(group: str, view: str, quest_ids: List[str]) -> List[str]:
-    normalized_ids = [str(quest_id) for quest_id in quest_ids]
+def save_external_quest(
+    external_id: str,
+    payload: Dict,
+    matziah: str,
+    local_status: Optional[str] = None,
+    transferred_quest_id: Optional[str] = None,
+) -> Dict:
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO quest_sort_orders (group_name, view_name, order_data, updated_at)
-                VALUES (%(group_name)s, %(view_name)s, %(order_data)s::jsonb, NOW())
-                ON CONFLICT (group_name, view_name)
-                DO UPDATE SET order_data = EXCLUDED.order_data, updated_at = NOW()
-                RETURNING order_data;
+                INSERT INTO external_quests (
+                    external_id, payload, matziah, local_status, transferred_quest_id, created_at, updated_at
+                )
+                VALUES (
+                    %(external_id)s, %(payload)s::jsonb, %(matziah)s, %(local_status)s, %(transferred_quest_id)s, NOW(), NOW()
+                )
+                ON CONFLICT (external_id)
+                DO UPDATE SET
+                    payload = EXCLUDED.payload,
+                    matziah = EXCLUDED.matziah,
+                    local_status = COALESCE(EXCLUDED.local_status, external_quests.local_status),
+                    transferred_quest_id = COALESCE(EXCLUDED.transferred_quest_id, external_quests.transferred_quest_id),
+                    updated_at = NOW()
+                RETURNING external_id, payload, matziah, local_status, transferred_quest_id;
                 """,
                 {
-                    "group_name": group,
-                    "view_name": view,
-                    "order_data": json.dumps(normalized_ids),
+                    "external_id": external_id,
+                    "payload": json.dumps(payload, ensure_ascii=False),
+                    "matziah": matziah,
+                    "local_status": local_status,
+                    "transferred_quest_id": transferred_quest_id,
                 },
             )
             row = cur.fetchone()
-            return [str(quest_id) for quest_id in row["order_data"]]
+            return _normalize_external_quest(row)
 
 
-def get_external_status_overrides(external_ids: List[str]) -> Dict[str, str]:
-    if not external_ids:
-        return {}
+def update_external_quest_status(external_id: str, external_status: str, local_status: str) -> Optional[Dict]:
+    existing_payload = get_external_quest(external_id)
+    if existing_payload is None:
+        return None
 
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT external_id, local_status
-                FROM external_quest_overrides
-                WHERE external_id = ANY(%(external_ids)s);
-                """,
-                {"external_ids": external_ids},
-            )
-            return {str(row["external_id"]): str(row["local_status"]) for row in cur.fetchall()}
-
-
-def save_external_status_override(external_id: str, local_status: str) -> str:
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                INSERT INTO external_quest_overrides (external_id, local_status, updated_at)
-                VALUES (%(external_id)s, %(local_status)s, NOW())
-                ON CONFLICT (external_id)
-                DO UPDATE SET local_status = EXCLUDED.local_status, updated_at = NOW()
-                RETURNING local_status;
-                """,
-                {"external_id": external_id, "local_status": local_status},
-            )
-            row = cur.fetchone()
-            return str(row["local_status"])
+    next_payload = dict(existing_payload)
+    next_payload["status"] = external_status
+    return save_external_quest(
+        external_id,
+        next_payload,
+        matziah=str(existing_payload.get("matziah") or "N"),
+        local_status=local_status,
+        transferred_quest_id=existing_payload.get("transferred_quest_id"),
+    )

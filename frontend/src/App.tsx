@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import GroupPage from './pages/GroupPage';
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
+import OpenTziuchPage from './pages/OpenTziuchPage';
 import UserPage from './pages/UserPage';
 import { useAuth } from './context/AuthContext';
 
@@ -23,6 +24,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/open-tziuch" element={<OpenTziuchPage />} />
       <Route
         path="/groups"
         element={

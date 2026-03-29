@@ -37,6 +37,8 @@ export type QuestPriority = 'גבוה' | 'רגיל' | 'נמוך';
 
 export type FtOption = 'FT1' | 'FT2' | 'FT3' | 'FT4' | 'FT5';
 
+export type MatziahOption = 'N' | 'H' | 'M';
+
 export interface Quest {
   id: string;
   title: string;
@@ -52,9 +54,13 @@ export interface Quest {
   lng?: number;
   lat?: number;
   shapefile_path?: string;
+  matziah?: MatziahOption | string;
+  sync_external_id?: string;
   sync_source?: string;
   sync_name?: string;
   external_status?: string;
+  isTransferred?: boolean;
+  transferred_quest_id?: string;
 }
 
 export interface LoginResponse {
@@ -67,10 +73,29 @@ export interface CreateQuestInput {
   description?: string;
   status?: QuestStatus | string;
   priority?: QuestPriority | string;
+  date?: string;
+  assigned_user?: string;
   year?: number;
   ft?: FtOption | string;
   group?: string;
   shapefile_path?: string;
+  matziah?: MatziahOption | string;
+  sync_external_id?: string;
+  sync_source?: string;
+  sync_name?: string;
+}
+
+export interface CreateExternalQuestInput {
+  title: string;
+  description?: string;
+  status?: QuestStatus | string;
+  priority?: QuestPriority | string;
+  date?: string;
+  assigned_user?: string;
+  year?: number;
+  ft?: FtOption | string;
+  group?: string;
+  matziah?: MatziahOption | string;
 }
 
 export interface GeoGeometry {
@@ -131,9 +156,3 @@ export interface LngLatPoint {
 }
 
 export type MapBounds = [[number, number], [number, number]];
-
-export interface QuestSortOrderResponse {
-  group: string;
-  view: string;
-  quest_ids: string[];
-}

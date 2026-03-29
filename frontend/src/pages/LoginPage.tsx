@@ -145,6 +145,18 @@ export default function LoginPage() {
           </button>
         </form>
 
+        <div style={S.externalEntry}>
+          <div style={S.externalEntryText}>צריך לפתוח ציוח חיצוני לפני הכניסה?</div>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={() => navigate('/open-tziuch')}
+            style={S.externalEntryButton}
+          >
+            פתח ציוח
+          </button>
+        </div>
+
         {/* Quick login buttons */}
         <div style={S.quickSection}>
           <div style={S.quickTitle}>כניסה מהירה לבדיקה:</div>
@@ -217,6 +229,25 @@ const S: Record<string, CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     gap: 8,
+  },
+  externalEntry: {
+    marginTop: 18,
+    padding: '14px 16px',
+    borderRadius: 12,
+    border: '1px solid var(--border)',
+    background: 'var(--surface2)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  externalEntryText: {
+    fontSize: 12,
+    color: 'var(--text2)',
+    lineHeight: 1.5,
+  },
+  externalEntryButton: {
+    flexShrink: 0,
   },
   quickSection: { marginTop: 24, borderTop: '1px solid var(--border)', paddingTop: 16 },
   quickTitle: { fontSize: 11, color: 'var(--text3)', marginBottom: 8, textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.06em' },
