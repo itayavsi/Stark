@@ -603,7 +603,7 @@ const S: Record<string, CSSProperties> = {
     border: '1px solid var(--border)',
     borderRadius: 7,
     padding: '5px 10px',
-    fontSize: 11,
+    fontSize: 12,
     color: 'var(--text)',
     boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
   },
