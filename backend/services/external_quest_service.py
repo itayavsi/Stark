@@ -118,6 +118,7 @@ def transform_external_quest_with_metadata(
         "group": str(item.get("group", EXTERNAL_QUESTS_GROUP) or EXTERNAL_QUESTS_GROUP),
         "year": _extract_year(date_text),
         "ft": str(item.get("ft", "FT1") or "FT1"),
+        "quest_type": str(item.get("ft", "FT1") or "FT1"),
         "matziah": matziah,
         "sync_external_id": external_id,
         "sync_source": str(item.get("source", "kipod") or "kipod"),
@@ -125,6 +126,12 @@ def transform_external_quest_with_metadata(
         "external_status": external_status,
         "isTransferred": bool(transferred_quest_id),
         "transferred_quest_id": transferred_quest_id,
+        "geometry_type": None,
+        "geometry_status": "missing",
+        "geometry_source_path": None,
+        "geometry_source_name": None,
+        "geometry_feature_count": 0,
+        "geometry_updated_at": None,
     }
 
 
@@ -178,6 +185,7 @@ def find_external_quest_by_signature(name: str, opener: str, date_text: str) -> 
 def build_external_quest_payload(data: dict[str, Any]) -> dict[str, Any]:
     date_text = _normalize_date(data.get("date"))
     local_status = str(data.get("status") or "Open")
+    quest_type = str(data.get("quest_type") or data.get("ft", "FT1") or "FT1")
     return {
         "name": str(data.get("title", "")).strip(),
         "notes": str(data.get("description", "") or ""),
@@ -187,7 +195,7 @@ def build_external_quest_payload(data: dict[str, Any]) -> dict[str, Any]:
         "opener": str(data.get("assigned_user", "") or ""),
         "group": str(data.get("group", EXTERNAL_QUESTS_GROUP) or EXTERNAL_QUESTS_GROUP),
         "year": data.get("year") or _extract_year(date_text),
-        "ft": str(data.get("ft", "FT1") or "FT1"),
+        "ft": quest_type,
         "matziah": str(data.get("matziah", "N") or "N"),
     }
 

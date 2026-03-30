@@ -1,4 +1,4 @@
-import type { AppLayer, GeoFeature, GeoFeatureCollection, LngLatPoint, MapBounds } from '../types/domain';
+import type { GeoFeature, GeoFeatureCollection, GeometryCatalog, LngLatPoint, MapBounds } from '../types/domain';
 
 const UTM_SCALE_FACTOR = 0.9996;
 const UTM_EQUATORIAL_RADIUS = 6378137.0;
@@ -77,11 +77,11 @@ export function getGeoJsonBounds(collection?: GeoFeatureCollection): MapBounds |
   return [[minLng, minLat], [maxLng, maxLat]];
 }
 
-export function getLayersBounds(layers: AppLayer[]): MapBounds | null {
+export function getFeatureCollectionsBounds(collections: Array<GeoFeatureCollection | undefined | null>): MapBounds | null {
   let combined: MapBounds | null = null;
 
-  layers.forEach((layer) => {
-    const bounds = getGeoJsonBounds(layer.data || layer.geojson);
+  collections.forEach((collection) => {
+    const bounds = getGeoJsonBounds(collection || undefined);
     if (!bounds) {
       return;
     }
@@ -104,6 +104,25 @@ export function getLayersBounds(layers: AppLayer[]): MapBounds | null {
   });
 
   return combined;
+}
+
+export function getQuestGeometryCollections(catalog: GeometryCatalog | null, questId: string): GeoFeatureCollection[] {
+  if (!catalog) {
+    return [];
+  }
+
+  return [catalog.points, catalog.polygons]
+    .map((collection) => ({
+      type: 'FeatureCollection' as const,
+      features: (collection.features || []).filter(
+        (feature) => String(feature.properties?.quest_id || '') === String(questId),
+      ),
+    }))
+    .filter((collection) => collection.features.length > 0);
+}
+
+export function getQuestGeometryBounds(catalog: GeometryCatalog | null, questId: string): MapBounds | null {
+  return getFeatureCollectionsBounds(getQuestGeometryCollections(catalog, questId));
 }
 
 function hemisphere(value: number, positive: string, negative: string): string {

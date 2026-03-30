@@ -11,7 +11,7 @@ import { useAuth } from '../context/AuthContext';
 import { getStoredQuestSortOrder, saveStoredQuestSortOrder } from '../lib/questSortStorage';
 import { createQuest, setQuestStatus } from '../services/api';
 import { FT_OPTIONS, ftColor } from '../services/ftConfig';
-import type { AppLayer, FtOption, LngLatPoint, Quest } from '../types/domain';
+import type { FtOption, GeometryCatalog, LngLatPoint, Quest } from '../types/domain';
 import { parseUTM } from '../utils/geo';
 import {
   ALL_QUEST_COLUMNS,
@@ -36,11 +36,9 @@ interface QuestPanelProps {
   quests: Quest[];
   loading: boolean;
   latestNewQuests: Quest[];
-  onRefresh: () => Promise<void> | void;
-  onShowOnMap: (quest: Quest) => Promise<void> | void;
+  onRefresh: () => Promise<GeometryCatalog | null> | GeometryCatalog | null;
+  onShowOnMap: (quest: Quest, catalogOverride?: GeometryCatalog | null) => Promise<void> | void;
   onJumpToPoint: (point: LngLatPoint) => void;
-  onLayerAdded: (layer: AppLayer) => void;
-  onOpenTable: (layers: AppLayer[]) => void;
 }
 
 export default function QuestPanel({
@@ -50,8 +48,6 @@ export default function QuestPanel({
   onRefresh,
   onShowOnMap,
   onJumpToPoint,
-  onLayerAdded,
-  onOpenTable,
 }: QuestPanelProps) {
   const [moreTab, setMoreTab] = useState<'new' | 'pending' | 'low'>('new');
   const notificationTimeoutsRef = useRef<number[]>([]);
@@ -267,6 +263,7 @@ export default function QuestPanel({
         priority: newPriority,
         year: newYear,
         ft: newFt,
+        quest_type: newFt,
         group: 'לווינות',
       });
       setNewTitle('');
@@ -780,8 +777,9 @@ export default function QuestPanel({
               <QuestItem
                 quest={q}
                 user={user}
-                onRefresh={onRefresh} onShowOnMap={onShowOnMap}
-                onLayerAdded={onLayerAdded} onOpenTable={onOpenTable} />
+                onRefresh={onRefresh}
+                onShowOnMap={onShowOnMap}
+              />
             </div>
           ))
         )}

@@ -195,6 +195,39 @@ def init_db() -> None:
                 """
             )
             cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS quest_geometries (
+                    quest_id UUID PRIMARY KEY,
+                    geometry_type TEXT NULL CHECK (geometry_type IN ('point', 'polygon')),
+                    geometry_status TEXT NOT NULL DEFAULT 'missing'
+                        CHECK (geometry_status IN ('missing', 'pending', 'ready', 'error')),
+                    geometry_geojson JSONB NULL,
+                    source_path TEXT NULL,
+                    source_name TEXT NULL,
+                    upload_kind TEXT NULL,
+                    feature_count INTEGER NOT NULL DEFAULT 0,
+                    utm_zone INTEGER NULL,
+                    utm_band TEXT NULL,
+                    utm_easting DOUBLE PRECISION NULL,
+                    utm_northing DOUBLE PRECISION NULL,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+                """
+            )
+            cur.execute(
+                """
+                CREATE INDEX IF NOT EXISTS quest_geometries_geometry_type_idx
+                ON quest_geometries (geometry_type);
+                """
+            )
+            cur.execute(
+                """
+                CREATE INDEX IF NOT EXISTS quest_geometries_geometry_status_idx
+                ON quest_geometries (geometry_status);
+                """
+            )
+            cur.execute(
                 f"""
                 INSERT INTO {FINISHED_QUESTS_TABLE} (
                     id, title, description, status, "תעדוף", date, assigned_user,
@@ -351,3 +384,42 @@ def init_db() -> None:
                             """,
                             finished_seed_quests,
                         )
+
+            cur.execute(
+                f"""
+                INSERT INTO quest_geometries (
+                    quest_id,
+                    geometry_status,
+                    source_path,
+                    feature_count,
+                    created_at,
+                    updated_at
+                )
+                SELECT
+                    all_quests.id,
+                    CASE
+                        WHEN all_quests.shapefile_path IS NOT NULL THEN 'pending'
+                        ELSE 'missing'
+                    END AS geometry_status,
+                    all_quests.shapefile_path,
+                    0,
+                    NOW(),
+                    NOW()
+                FROM (
+                    SELECT id, shapefile_path FROM {OPEN_QUESTS_TABLE}
+                    UNION
+                    SELECT id, shapefile_path FROM {FINISHED_QUESTS_TABLE}
+                ) AS all_quests
+                ON CONFLICT (quest_id)
+                DO UPDATE SET
+                    source_path = COALESCE(quest_geometries.source_path, EXCLUDED.source_path),
+                    geometry_status = CASE
+                        WHEN quest_geometries.geometry_status = 'missing'
+                             AND quest_geometries.geometry_type IS NULL
+                             AND quest_geometries.geometry_geojson IS NULL
+                             AND EXCLUDED.source_path IS NOT NULL
+                        THEN 'pending'
+                        ELSE quest_geometries.geometry_status
+                    END;
+                """
+            )

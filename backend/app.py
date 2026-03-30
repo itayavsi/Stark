@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routes import auth, quests, shapefiles, users
+from routes import auth, geometry, quests, shapefiles, users
 from services.db import init_db
 
 app = FastAPI(title="GIS App API", version="1.0.0")
@@ -15,6 +15,7 @@ app.add_middleware(
 
 app.include_router(auth.router, prefix="/auth", tags=["auth"])
 app.include_router(quests.router, prefix="/quests", tags=["quests"])
+app.include_router(geometry.router, prefix="/geometry", tags=["geometry"])
 app.include_router(shapefiles.router, prefix="/shapefiles", tags=["shapefiles"])
 app.include_router(users.router, prefix="/users", tags=["users"])
 

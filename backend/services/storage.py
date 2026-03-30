@@ -1,4 +1,5 @@
 import json
+from datetime import datetime
 from typing import Dict, List, Optional
 
 from services.db import get_connection
@@ -31,18 +32,64 @@ def _normalize_quest(row: Dict) -> Dict:
         "group": row["group_name"],
         "year": row["year"],
         "ft": row["ft"],
+        "quest_type": row["ft"],
         "matziah": row["matziah"],
         "sync_external_id": row["sync_external_id"],
         "sync_source": row["sync_source"],
         "sync_name": row["sync_name"],
+        "geometry_type": row["geometry_type"],
+        "geometry_status": row["geometry_status"],
+        "geometry_source_path": row["geometry_source_path"],
+        "geometry_source_name": row["geometry_source_name"],
+        "geometry_feature_count": row["geometry_feature_count"] or 0,
+        "geometry_updated_at": _normalize_timestamp(row["geometry_updated_at"]),
     }
 
 
-def _quest_columns() -> str:
-    return """
-        id, title, description, status, "תעדוף" AS priority, date, assigned_user,
-        shapefile_path, group_name, year, ft, "מצייח" AS matziah,
-        sync_external_id, sync_source, sync_name
+def _normalize_timestamp(value) -> str | None:
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if value is None:
+        return None
+    return str(value)
+
+
+def _quest_columns(table_alias: str = "q") -> str:
+    prefix = f"{table_alias}." if table_alias else ""
+    return f"""
+        {prefix}id,
+        {prefix}title,
+        {prefix}description,
+        {prefix}status,
+        {prefix}"תעדוף" AS priority,
+        {prefix}date,
+        {prefix}assigned_user,
+        {prefix}shapefile_path,
+        {prefix}group_name,
+        {prefix}year,
+        {prefix}ft,
+        {prefix}"מצייח" AS matziah,
+        {prefix}sync_external_id,
+        {prefix}sync_source,
+        {prefix}sync_name,
+        g.geometry_type,
+        COALESCE(
+            g.geometry_status,
+            CASE WHEN {prefix}shapefile_path IS NOT NULL THEN 'pending' ELSE 'missing' END
+        ) AS geometry_status,
+        COALESCE(g.source_path, {prefix}shapefile_path) AS geometry_source_path,
+        g.source_name AS geometry_source_name,
+        COALESCE(g.feature_count, 0) AS geometry_feature_count,
+        g.updated_at AS geometry_updated_at
+    """
+
+
+def _quest_table_query(table_name: str, table_alias: str = "q") -> str:
+    return f"""
+        SELECT
+            {_quest_columns(table_alias)}
+        FROM {table_name} AS {table_alias}
+        LEFT JOIN quest_geometries AS g ON g.quest_id = {table_alias}.id
     """
 
 
@@ -146,10 +193,8 @@ def get_quests() -> List[Dict]:
         with conn.cursor() as cur:
             cur.execute(
                 f"""
-                SELECT
-                    {_quest_columns()}
-                FROM {OPEN_QUESTS_TABLE}
-                ORDER BY date DESC, title ASC;
+                {_quest_table_query(OPEN_QUESTS_TABLE)}
+                ORDER BY q.date DESC, q.title ASC;
                 """
             )
             return [_normalize_quest(row) for row in cur.fetchall()]
@@ -160,10 +205,8 @@ def get_finished_quests() -> List[Dict]:
         with conn.cursor() as cur:
             cur.execute(
                 f"""
-                SELECT
-                    {_quest_columns()}
-                FROM {FINISHED_QUESTS_TABLE}
-                ORDER BY date DESC, title ASC;
+                {_quest_table_query(FINISHED_QUESTS_TABLE)}
+                ORDER BY q.date DESC, q.title ASC;
                 """
             )
             return [_normalize_quest(row) for row in cur.fetchall()]
@@ -174,10 +217,8 @@ def get_quest_by_id(quest_id: str) -> Optional[Dict]:
         with conn.cursor() as cur:
             cur.execute(
                 f"""
-                SELECT
-                    {_quest_columns()}
-                FROM {OPEN_QUESTS_TABLE}
-                WHERE id = %(quest_id)s;
+                {_quest_table_query(OPEN_QUESTS_TABLE)}
+                WHERE q.id = %(quest_id)s;
                 """,
                 {"quest_id": quest_id},
             )
@@ -185,10 +226,8 @@ def get_quest_by_id(quest_id: str) -> Optional[Dict]:
             if row is None:
                 cur.execute(
                     f"""
-                    SELECT
-                        {_quest_columns()}
-                    FROM {FINISHED_QUESTS_TABLE}
-                    WHERE id = %(quest_id)s;
+                    {_quest_table_query(FINISHED_QUESTS_TABLE)}
+                    WHERE q.id = %(quest_id)s;
                     """,
                     {"quest_id": quest_id},
                 )
@@ -203,10 +242,8 @@ def get_quest_by_sync_external_id(external_id: str) -> Optional[Dict]:
         with conn.cursor() as cur:
             cur.execute(
                 f"""
-                SELECT
-                    {_quest_columns()}
-                FROM {OPEN_QUESTS_TABLE}
-                WHERE sync_external_id = %(external_id)s;
+                {_quest_table_query(OPEN_QUESTS_TABLE)}
+                WHERE q.sync_external_id = %(external_id)s;
                 """,
                 {"external_id": external_id},
             )
@@ -214,10 +251,8 @@ def get_quest_by_sync_external_id(external_id: str) -> Optional[Dict]:
             if row is None:
                 cur.execute(
                     f"""
-                    SELECT
-                        {_quest_columns()}
-                    FROM {FINISHED_QUESTS_TABLE}
-                    WHERE sync_external_id = %(external_id)s;
+                    {_quest_table_query(FINISHED_QUESTS_TABLE)}
+                    WHERE q.sync_external_id = %(external_id)s;
                     """,
                     {"external_id": external_id},
                 )
@@ -260,6 +295,32 @@ def save_quest(quest: Dict):
                     "sync_external_id": quest.get("sync_external_id"),
                     "sync_source": quest.get("sync_source"),
                     "sync_name": quest.get("sync_name"),
+                },
+            )
+            cur.execute(
+                """
+                INSERT INTO quest_geometries (
+                    quest_id,
+                    geometry_status,
+                    source_path,
+                    feature_count,
+                    created_at,
+                    updated_at
+                )
+                VALUES (
+                    %(quest_id)s,
+                    %(geometry_status)s,
+                    %(source_path)s,
+                    0,
+                    NOW(),
+                    NOW()
+                )
+                ON CONFLICT (quest_id) DO NOTHING;
+                """,
+                {
+                    "quest_id": quest["id"],
+                    "geometry_status": "pending" if quest.get("shapefile_path") else "missing",
+                    "source_path": quest.get("shapefile_path"),
                 },
             )
 
@@ -305,14 +366,50 @@ def update_quest(quest_id: str, updates: Dict) -> Optional[Dict]:
                     UPDATE {table_name}
                     SET {", ".join(assignments)}
                     WHERE id = %(quest_id)s
-                    RETURNING
-                        {_quest_columns()};
+                    RETURNING id;
                     """,
                     params,
                 )
                 row = cur.fetchone()
                 if row is not None:
-                    return _normalize_quest(row)
+                    if "shapefile_path" in updates:
+                        cur.execute(
+                            """
+                            INSERT INTO quest_geometries (
+                                quest_id,
+                                geometry_status,
+                                source_path,
+                                feature_count,
+                                created_at,
+                                updated_at
+                            )
+                            VALUES (
+                                %(quest_id)s,
+                                %(geometry_status)s,
+                                %(source_path)s,
+                                0,
+                                NOW(),
+                                NOW()
+                            )
+                            ON CONFLICT (quest_id)
+                            DO UPDATE SET
+                                source_path = COALESCE(quest_geometries.source_path, EXCLUDED.source_path),
+                                geometry_status = CASE
+                                    WHEN quest_geometries.geometry_type IS NULL
+                                         AND quest_geometries.geometry_geojson IS NULL
+                                         AND EXCLUDED.source_path IS NOT NULL
+                                    THEN 'pending'
+                                    ELSE quest_geometries.geometry_status
+                                END,
+                                updated_at = NOW();
+                            """,
+                            {
+                                "quest_id": quest_id,
+                                "geometry_status": "pending" if updates.get("shapefile_path") else "missing",
+                                "source_path": updates.get("shapefile_path"),
+                            },
+                        )
+                    return get_quest_by_id(quest_id)
             return None
 
 
@@ -344,7 +441,21 @@ def move_quest(quest_id: str, destination_table: str, updates: Optional[Dict] = 
                 DELETE FROM {source_table}
                 WHERE id = %(quest_id)s
                 RETURNING
-                    {_quest_columns()};
+                    id,
+                    title,
+                    description,
+                    status,
+                    "תעדוף" AS priority,
+                    date,
+                    assigned_user,
+                    shapefile_path,
+                    group_name,
+                    year,
+                    ft,
+                    "מצייח" AS matziah,
+                    sync_external_id,
+                    sync_source,
+                    sync_name;
                 """,
                 {"quest_id": quest_id},
             )
@@ -352,7 +463,23 @@ def move_quest(quest_id: str, destination_table: str, updates: Optional[Dict] = 
             if row is None:
                 return None
 
-            quest = _normalize_quest(row)
+            quest = {
+                "id": str(row["id"]),
+                "title": row["title"],
+                "description": row["description"],
+                "status": row["status"],
+                "priority": row["priority"],
+                "date": row["date"],
+                "assigned_user": row["assigned_user"],
+                "shapefile_path": row["shapefile_path"],
+                "group": row["group_name"],
+                "year": row["year"],
+                "ft": row["ft"],
+                "matziah": row["matziah"],
+                "sync_external_id": row["sync_external_id"],
+                "sync_source": row["sync_source"],
+                "sync_name": row["sync_name"],
+            }
             for key, value in updates.items():
                 if key in allowed_fields:
                     quest[key] = value
@@ -384,13 +511,11 @@ def move_quest(quest_id: str, destination_table: str, updates: Optional[Dict] = 
                     "מצייח" = EXCLUDED."מצייח",
                     sync_external_id = EXCLUDED.sync_external_id,
                     sync_source = EXCLUDED.sync_source,
-                    sync_name = EXCLUDED.sync_name
-                RETURNING
-                    {_quest_columns()};
+                    sync_name = EXCLUDED.sync_name;
                 """,
                 quest,
             )
-            return _normalize_quest(cur.fetchone())
+            return get_quest_by_id(quest_id)
 
 
 def get_external_quests() -> List[Dict]:

@@ -23,6 +23,7 @@ class QuestCreate(BaseModel):
     group: Optional[str] = "לווינות"
     year: Optional[int] = 2026
     ft: Optional[str] = "FT1"
+    quest_type: Optional[str] = None
     matziah: Optional[MatziahOption | str] = "H"
     sync_external_id: Optional[str] = None
     sync_source: Optional[str] = None
@@ -39,4 +40,5 @@ class ExternalQuestCreate(BaseModel):
     group: Optional[str] = "לווינות"
     year: Optional[int] = 2026
     ft: Optional[str] = "FT1"
+    quest_type: Optional[str] = None
     matziah: Optional[MatziahOption | str] = "N"

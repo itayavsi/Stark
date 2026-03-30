@@ -4,11 +4,10 @@ import { getStoredToken } from '../lib/session';
 import type {
   CreateExternalQuestInput,
   CreateQuestInput,
-  LayerDataResponse,
+  GeometryCatalog,
   LoginResponse,
   Quest,
-  ResolveShpFolderResponse,
-  UploadShapefileResponse,
+  QuestGeometryRecord,
   User,
   UserCreateInput,
   UserUpdateInput,
@@ -57,26 +56,41 @@ export const setQuestStatus = (questId: string, status: string) =>
 export const setQuestPriority = (questId: string, priority: string) =>
   api.patch(`/quests/${encodeQuestId(questId)}/priority`, { priority }).then((response) => response.data);
 
+export const updateQuest = (questId: string, data: Partial<Quest>) =>
+  api.patch<Quest>(`/quests/${encodeQuestId(questId)}`, data).then((response) => response.data);
+
+export const uploadQuestPointsGeometry = (questId: string, file: File) => {
+  const fd = new FormData();
+  fd.append('file', file);
+  return api
+    .post<QuestGeometryRecord>(`/geometry/quests/${encodeQuestId(questId)}/points-upload`, fd)
+    .then((response) => response.data);
+};
+
 export const transferExternalQuestToOpen = (questId: string) =>
   api.post<Quest>(`/quests/${encodeQuestId(questId)}/transfer-to-open`).then((response) => response.data);
 
-export const uploadShapefile = (questId: string, file: File) => {
+export const getGeometryCatalog = () =>
+  api.get<GeometryCatalog>('/geometry/catalog').then((response) => response.data);
+
+export const getQuestGeometry = (questId: string) =>
+  api.get<QuestGeometryRecord>(`/geometry/quests/${encodeQuestId(questId)}`).then((response) => response.data);
+
+export const saveQuestPointGeometry = (questId: string, utm: string) =>
+  api.put<QuestGeometryRecord>(`/geometry/quests/${encodeQuestId(questId)}/point`, { utm }).then((response) => response.data);
+
+export const uploadQuestPolygonGeometry = (questId: string, files: File[]) => {
   const fd = new FormData();
-  fd.append('quest_id', String(questId));
-  fd.append('file', file);
-  return api.post<UploadShapefileResponse>('/shapefiles/upload', fd).then((response) => response.data);
-};
 
-export const getLayerData = (questId: string) =>
-  api.get<LayerDataResponse>(`/shapefiles/layer-data/${questId}`).then((response) => response.data);
+  files.forEach((file) => {
+    const relativePath = (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name;
+    fd.append('files', file, relativePath);
+  });
 
-export const checkFolder = (path: string) =>
-  api.get('/shapefiles/check-folder', { params: { path } }).then((response) => response.data);
-
-export const resolveShpFolder = (path: string) =>
-  api
-    .get<ResolveShpFolderResponse>('/shapefiles/resolve-shp-folder', { params: { path } })
+  return api
+    .post<QuestGeometryRecord>(`/geometry/quests/${encodeQuestId(questId)}/polygon-upload`, fd)
     .then((response) => response.data);
+};
 
 export const getUsers = () =>
   api.get<User[]>('/users/').then((response) => response.data);

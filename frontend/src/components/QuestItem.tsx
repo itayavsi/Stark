@@ -1,15 +1,14 @@
 import { useEffect, useRef, useState, type ChangeEvent, type CSSProperties, type MouseEvent } from 'react';
 import {
-  getLayerData,
   setQuestPriority,
   setQuestStatus,
   takeQuest,
   transferExternalQuestToOpen,
-  uploadShapefile,
 } from '../services/api';
 import { ftColor } from '../services/ftConfig';
-import type { AppLayer, Quest, User } from '../types/domain';
+import type { GeometryCatalog, Quest, QuestGeometryRecord, User } from '../types/domain';
 import { getQuestDisplayStatus, isLowPriorityQuest } from '../utils/quests';
+import QuestGeometryEditor from './QuestGeometryEditor';
 
 const STATUS_MAP = {
   New:           { label: '🔔 חדש', cls: 'badge-new' },
@@ -28,10 +27,8 @@ type MessageType = 'success' | 'error' | 'warning' | 'info';
 interface QuestItemProps {
   quest: Quest;
   user: User | null;
-  onRefresh: () => Promise<void> | void;
-  onShowOnMap: (quest: Quest) => void;
-  onLayerAdded: (layer: AppLayer) => void;
-  onOpenTable?: (layers: AppLayer[]) => void;
+  onRefresh: () => Promise<GeometryCatalog | null> | GeometryCatalog | null;
+  onShowOnMap: (quest: Quest, catalogOverride?: GeometryCatalog | null) => void;
 }
 
 export default function QuestItem({
@@ -39,13 +36,10 @@ export default function QuestItem({
   user,
   onRefresh,
   onShowOnMap,
-  onLayerAdded,
-  onOpenTable,
 }: QuestItemProps) {
   const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ text: string; type: MessageType }>({ text: '', type: 'info' });
-  const [uploadProgress, setUploadProgress] = useState(false);
   const clearMessageTimeout = useRef<number | null>(null);
 
   const role = user?.role || 'Viewer';
@@ -58,6 +52,11 @@ export default function QuestItem({
   const isExternalQuest = quest.id.startsWith('external:');
   const canTransferToOpen = isExternalQuest && !quest.isTransferred && !isViewer;
   const matziahLabel = quest.matziah ? `מצייח ${quest.matziah}` : null;
+  const geometryLabel = quest.geometry_type === 'point'
+    ? 'Point'
+    : quest.geometry_type === 'polygon'
+      ? 'Polygon'
+      : 'No geometry';
 
   useEffect(() => {
     return () => {
@@ -132,84 +131,19 @@ export default function QuestItem({
     setBusy(false);
   };
 
-  const handleUpload = async (e: ChangeEvent<HTMLInputElement>) => {
-    e.stopPropagation();
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setUploadProgress(true);
-    showMsg(`⏳ מעלה ${file.name}...`, 'info');
-
-    try {
-      const res = await uploadShapefile(quest.id, file);
-
-      if (res.status === 'error') {
-        showMsg(`✗ שגיאה: ${res.error}`, 'error');
-        return;
-      }
-
-      const uploadedLayers = res.layers || [];
-      if (uploadedLayers.length === 0) {
-        showMsg('הקובץ הועלה אך לא נמצאו שכבות להצגה', 'warning');
-        return;
-      }
-
-      // Add each layer to the map
-      const mapLayers: AppLayer[] = [];
-      uploadedLayers.forEach((l) => {
-        if (l.geojson) {
-          const layerObj = {
-            name: l.name || quest.title,
-            data: l.geojson,
-            year: quest.year,
-            ft: quest.ft,
-            fields: l.fields || [],
-          };
-          onLayerAdded(layerObj);
-          mapLayers.push(layerObj);
-        }
-      });
-
-      // Open attribute table if data loaded
-      if (mapLayers.length > 0 && onOpenTable) {
-        onOpenTable(mapLayers);
-      }
-
-      showMsg(`✓ ${uploadedLayers.length} שכבות נטענו למפה`, 'success');
-      await onRefresh();
-    } catch (err: any) {
-      showMsg(`✗ שגיאת העלאה: ${err?.response?.data?.detail || err?.message || 'שגיאה לא ידועה'}`, 'error');
-    } finally {
-      setUploadProgress(false);
-      e.target.value = '';
-    }
-  };
-
-  const handleCheckFolder = async (e: MouseEvent<HTMLButtonElement>) => {
-    e.stopPropagation();
-    setBusy(true);
-    showMsg('⏳ סורק תיקייה...', 'info');
-    try {
-      const res = await getLayerData(quest.id);
-      const layers = res.layers || [];
-      if (!layers.length) {
-        showMsg('לא נמצאו קבצים בתיקייה', 'warning');
-        return;
-      }
-      const mapLayers: AppLayer[] = [];
-      layers.forEach((l) => {
-        if (l.data) {
-          const layerObj = { name: l.name, data: l.data, year: quest.year, ft: quest.ft, fields: l.fields || [] };
-          onLayerAdded(layerObj);
-          mapLayers.push(layerObj);
-        }
-      });
-      if (mapLayers.length > 0 && onOpenTable) onOpenTable(mapLayers);
-      showMsg(`✓ נטענו ${mapLayers.length} שכבות`, 'success');
-    } catch {
-      showMsg('✗ תיקייה לא נמצאה או ריקה', 'error');
-    }
-    setBusy(false);
+  const handleGeometrySaved = async (geometry: QuestGeometryRecord) => {
+    const catalog = await onRefresh();
+    onShowOnMap(
+      {
+        ...quest,
+        geometry_type: geometry.geometry_type,
+        geometry_status: geometry.geometry_status,
+        geometry_source_path: geometry.source_path,
+        geometry_source_name: geometry.source_name,
+        geometry_feature_count: geometry.feature_count,
+      },
+      catalog || null,
+    );
   };
 
   const msgColor: Record<MessageType, string> = { success:'var(--green)', error:'var(--red)', warning:'var(--orange)', info:'var(--accent)' };
@@ -225,6 +159,7 @@ export default function QuestItem({
           <span className={`badge ${status.cls}`}>{status.label}</span>
           {lowPriority && <span style={S.priorityBadge}>⋯ תעדוף נמוך</span>}
           {matziahLabel && <span style={S.syncBadge}>{matziahLabel}</span>}
+          <span style={S.geometryBadge}>{geometryLabel}</span>
           {!quest.ft && quest.year && <span style={{ fontSize:11, color: ftClr, fontWeight:700 }}>{quest.year}</span>}
           {quest.ft && <span style={{ ...S.ftBadge, background: ftClr + '22', color: ftClr, border: `1px solid ${ftClr}55` }}>{quest.ft}</span>}
         </div>
@@ -287,31 +222,6 @@ export default function QuestItem({
               <span style={S.transferState}>כבר הועבר למאגר הפתוחות</span>
             )}
 
-            {/* Check folder */}
-            {!isViewer && !isExternalQuest && (
-              <button className="btn btn-ghost btn-sm" onClick={handleCheckFolder} disabled={busy}>
-                📁 בדוק תיקייה
-              </button>
-            )}
-
-            {/* Upload SHP/ZIP/GeoJSON */}
-            {!isViewer && !isExternalQuest && quest.status !== 'Approved' && (
-              <label
-                className="btn btn-ghost btn-sm"
-                style={{ cursor: uploadProgress ? 'wait' : 'pointer' }}
-                onClick={e => e.stopPropagation()}
-              >
-                {uploadProgress ? '⏳ מעלה...' : '📤 העלה SHP / ZIP / GeoJSON'}
-                <input
-                  type="file"
-                  accept=".shp,.geojson,.json,.zip"
-                  style={{ display: 'none' }}
-                  onChange={handleUpload}
-                  disabled={uploadProgress}
-                />
-              </label>
-            )}
-
           </div>
 
           {/* Status selector for Team Leader */}
@@ -358,9 +268,13 @@ export default function QuestItem({
             </div>
           )}
 
-          {/* Shapefile path hint */}
-          {quest.shapefile_path && (
-            <div style={S.pathHint}>📁 {quest.shapefile_path}</div>
+          {!isViewer && !isExternalQuest && quest.status !== 'Approved' && (
+            <QuestGeometryEditor
+              quest={quest}
+              disabled={busy}
+              onSaved={async (geometry) => handleGeometrySaved(geometry)}
+              onMessage={showMsg}
+            />
           )}
 
         </div>
@@ -415,11 +329,6 @@ const S: Record<string, CSSProperties> = {
     color: 'color-mix(in srgb, var(--orange) 76%, var(--text))',
     border: '1px solid color-mix(in srgb, var(--orange) 32%, var(--border))',
   },
-  pathHint: {
-    marginTop:8, fontSize:10, color:'var(--text3)',
-    background:'var(--surface)', borderRadius:4,
-    padding:'3px 8px', fontFamily:'monospace', wordBreak:'break-all',
-  },
   syncBadge: {
     fontSize: 10,
     fontWeight: 700,
@@ -438,5 +347,14 @@ const S: Record<string, CSSProperties> = {
     fontSize: 11,
     color: 'var(--green)',
     alignSelf: 'center',
+  },
+  geometryBadge: {
+    fontSize: 10,
+    fontWeight: 700,
+    padding: '2px 8px',
+    borderRadius: 20,
+    background: 'color-mix(in srgb, var(--accent) 10%, var(--surface))',
+    color: 'var(--text2)',
+    border: '1px solid color-mix(in srgb, var(--accent) 24%, var(--border))',
   },
 };

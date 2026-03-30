@@ -38,6 +38,7 @@ def _normalize_matziah(value: str | None, default: str) -> str:
 def _build_local_quest_payload(data: dict, default_matziah: str = "H") -> dict:
     today = datetime.now().strftime("%Y-%m-%d")
     sync_external_id = data.get("sync_external_id")
+    quest_type = data.get("quest_type") or data.get("ft") or "FT1"
     quest = {
         "id": str(uuid.uuid4()),
         "title": data.get("title", ""),
@@ -49,7 +50,8 @@ def _build_local_quest_payload(data: dict, default_matziah: str = "H") -> dict:
         "shapefile_path": data.get("shapefile_path"),
         "group": data.get("group", "לווינות"),
         "year": data.get("year", datetime.now().year),
-        "ft": data.get("ft", "FT1"),
+        "ft": quest_type,
+        "quest_type": quest_type,
         "matziah": _normalize_matziah(
             data.get("matziah"),
             default="N" if sync_external_id and default_matziah == "H" else default_matziah,
@@ -57,6 +59,12 @@ def _build_local_quest_payload(data: dict, default_matziah: str = "H") -> dict:
         "sync_external_id": sync_external_id,
         "sync_source": data.get("sync_source"),
         "sync_name": data.get("sync_name"),
+        "geometry_type": None,
+        "geometry_status": "pending" if data.get("shapefile_path") else "missing",
+        "geometry_source_path": data.get("shapefile_path"),
+        "geometry_source_name": None,
+        "geometry_feature_count": 0,
+        "geometry_updated_at": None,
     }
     return quest
 
@@ -106,7 +114,7 @@ def get_quest(quest_id: str):
 def create_quest(data: dict):
     quest = _build_local_quest_payload(data, default_matziah="H")
     save_quest(quest)
-    return quest
+    return get_quest(quest["id"]) or quest
 
 
 def create_external_quest_entry(data: dict):

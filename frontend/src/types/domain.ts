@@ -38,12 +38,15 @@ export type QuestPriority = 'גבוה' | 'רגיל' | 'נמוך';
 export type FtOption = 'FT1' | 'FT2' | 'FT3' | 'FT4' | 'FT5';
 
 export type MatziahOption = 'N' | 'H' | 'M';
+export type GeometryType = 'point' | 'polygon';
+export type GeometryStatus = 'missing' | 'pending' | 'ready' | 'error';
 
 export interface Quest {
   id: string;
   title: string;
   description?: string;
   ft?: FtOption | string;
+  quest_type?: FtOption | string;
   status: QuestStatus | string;
   priority?: QuestPriority | string;
   isNew?: boolean;
@@ -61,6 +64,12 @@ export interface Quest {
   external_status?: string;
   isTransferred?: boolean;
   transferred_quest_id?: string;
+  geometry_type?: GeometryType | null;
+  geometry_status?: GeometryStatus | string;
+  geometry_source_path?: string | null;
+  geometry_source_name?: string | null;
+  geometry_feature_count?: number;
+  geometry_updated_at?: string | null;
 }
 
 export interface LoginResponse {
@@ -77,6 +86,7 @@ export interface CreateQuestInput {
   assigned_user?: string;
   year?: number;
   ft?: FtOption | string;
+  quest_type?: FtOption | string;
   group?: string;
   shapefile_path?: string;
   matziah?: MatziahOption | string;
@@ -94,6 +104,7 @@ export interface CreateExternalQuestInput {
   assigned_user?: string;
   year?: number;
   ft?: FtOption | string;
+  quest_type?: FtOption | string;
   group?: string;
   matziah?: MatziahOption | string;
 }
@@ -115,39 +126,43 @@ export interface GeoFeatureCollection {
   features: GeoFeature[];
 }
 
-export interface UploadedLayerPayload {
-  name?: string;
-  geojson?: GeoFeatureCollection;
-  data?: GeoFeatureCollection;
-  fields?: string[];
-  type?: string;
+export interface GeometryCatalog {
+  quest_types: string[];
+  points: GeoFeatureCollection;
+  polygons: GeoFeatureCollection;
 }
 
-export interface AppLayer {
-  id?: string;
-  name: string;
-  data?: GeoFeatureCollection;
-  geojson?: GeoFeatureCollection;
-  fields: string[];
+export interface QuestGeometryRecord {
+  quest_id: string;
+  title: string;
+  description?: string;
+  status: QuestStatus | string;
+  priority?: QuestPriority | string;
+  date?: string;
+  assigned_user?: string | null;
+  group?: string;
   year?: number;
   ft?: FtOption | string;
-  type?: string;
-  visible?: boolean;
+  quest_type?: FtOption | string;
+  matziah?: MatziahOption | string;
+  geometry_type?: GeometryType | null;
+  geometry_status: GeometryStatus | string;
+  source_path?: string | null;
+  source_name?: string | null;
+  upload_kind?: string | null;
+  feature_count: number;
+  feature_collection?: GeoFeatureCollection | null;
+  utm_zone?: number | null;
+  utm_band?: string | null;
+  utm_easting?: number | null;
+  utm_northing?: number | null;
+  updated_at?: string | null;
 }
 
-export interface LayerDataResponse {
-  layers?: UploadedLayerPayload[];
-}
-
-export interface UploadShapefileResponse {
-  status?: string;
-  error?: string;
-  layers?: UploadedLayerPayload[];
-}
-
-export interface ResolveShpFolderResponse {
-  path: string;
-  shapefile_path: string;
+export interface LayerFilters {
+  showPoints: boolean;
+  showPolygons: boolean;
+  questTypes: Record<string, boolean>;
 }
 
 export interface LngLatPoint {

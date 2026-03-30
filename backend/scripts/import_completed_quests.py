@@ -269,6 +269,32 @@ def _insert_quest(cur: Any, quest: dict[str, Any]) -> None:
             "ft": quest["ft"],
         },
     )
+    cur.execute(
+        """
+        INSERT INTO quest_geometries (
+            quest_id,
+            geometry_status,
+            source_path,
+            feature_count,
+            created_at,
+            updated_at
+        )
+        VALUES (
+            %(quest_id)s,
+            %(geometry_status)s,
+            %(source_path)s,
+            0,
+            NOW(),
+            NOW()
+        )
+        ON CONFLICT (quest_id) DO NOTHING;
+        """,
+        {
+            "quest_id": quest["id"],
+            "geometry_status": "pending" if quest.get("shapefile_path") else "missing",
+            "source_path": quest.get("shapefile_path"),
+        },
+    )
 
 
 def main() -> int:
