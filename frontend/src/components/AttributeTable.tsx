@@ -135,8 +135,8 @@ export default function AttributeTable({
     URL.revokeObjectURL(url);
   };
 
-  const handleZoomIn = () => setZoomLevel((prev) => Math.min(prev + 10, 150));
-  const handleZoomOut = () => setZoomLevel((prev) => Math.max(prev - 10, 70));
+  const handleZoomIn = () => setZoomLevel((prev) => Math.max(prev - 10, 70));
+  const handleZoomOut = () => setZoomLevel((prev) => Math.min(prev + 10, 150));
 
   const startEditing = (quest: Quest) => {
     setEditingRowId(quest.id);
@@ -213,6 +213,10 @@ export default function AttributeTable({
 
   const tableStyle: CSSProperties = {
     fontSize: `${zoomLevel}%`,
+  };
+
+  const rowStyle: CSSProperties = {
+    height: zoomLevel >= 100 ? 'auto' : `${100 / (zoomLevel / 100)}px`,
   };
 
   return (
@@ -302,10 +306,10 @@ export default function AttributeTable({
             <select
               style={S.sqlSelect}
               value={activeSqlFilter?.field ?? ''}
-              onChange={(e) => setActiveSqlFilter({ ...activeSqlFilter!, field: e.target.value as keyof Quest, operator: '=', value: '' })}
+              onChange={(e) => setActiveSqlFilter({ field: e.target.value as keyof Quest, operator: '=', value: '' })}
             >
               <option value="">שדה...</option>
-              {COLUMNS.map((col) => (
+              {COLUMNS.filter(col => col.key !== 'geometry_summary').map((col) => (
                 <option key={col.key} value={col.key}>{col.label}</option>
               ))}
             </select>
@@ -379,6 +383,7 @@ export default function AttributeTable({
                 key={quest.id}
                 style={{
                   ...S.tr,
+                  ...rowStyle,
                   ...(index % 2 === 1 ? S.trAlt : {}),
                   ...(selectedQuestId === quest.id ? S.trSelected : {}),
                 }}
@@ -631,34 +636,36 @@ const S: Record<string, CSSProperties> = {
   sqlPanel: {
     background: 'var(--surface2)',
     borderBottom: '1px solid var(--border)',
-    padding: '10px 14px',
+    padding: '8px 14px',
+    maxHeight: 200,
+    overflowY: 'auto',
   },
   sqlPanelHeader: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   sqlPanelTitle: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: 600,
     color: 'var(--text)',
   },
   sqlFiltersList: {
     display: 'flex',
     flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 8,
+    gap: 4,
+    marginBottom: 6,
   },
   sqlFilterChip: {
     display: 'flex',
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
     background: 'var(--accent)',
     color: '#fff',
-    borderRadius: 6,
-    padding: '4px 10px',
-    fontSize: 11,
+    borderRadius: 4,
+    padding: '2px 8px',
+    fontSize: 10,
   },
   removeFilterBtn: {
     background: 'none',
@@ -666,33 +673,43 @@ const S: Record<string, CSSProperties> = {
     color: '#fff',
     cursor: 'pointer',
     padding: 0,
-    fontSize: 12,
+    fontSize: 10,
     opacity: 0.8,
   },
   sqlForm: {
     display: 'flex',
-    gap: 8,
+    gap: 6,
     alignItems: 'center',
     flexWrap: 'wrap',
   },
   sqlSelect: {
-    fontSize: 12,
-    padding: '6px 8px',
-    borderRadius: 6,
+    fontSize: 11,
+    padding: '4px 6px',
+    borderRadius: 4,
     border: '1px solid var(--border)',
     background: 'var(--surface)',
     color: 'var(--text)',
     fontFamily: 'var(--font)',
+    width: 'auto',
+    maxWidth: 110,
+    minWidth: 0,
+    appearance: 'none' as const,
+    WebkitAppearance: 'none' as const,
+    cursor: 'pointer',
+    textOverflow: 'ellipsis',
+    overflow: 'hidden',
+    whiteSpace: 'nowrap',
   },
   sqlInput: {
-    fontSize: 12,
-    padding: '6px 10px',
-    borderRadius: 6,
+    fontSize: 11,
+    padding: '4px 8px',
+    borderRadius: 4,
     border: '1px solid var(--border)',
     background: 'var(--surface)',
     color: 'var(--text)',
     fontFamily: 'var(--font)',
-    minWidth: 150,
+    width: 90,
+    minWidth: 0,
   },
   infoBar: {
     display: 'flex',
@@ -722,13 +739,14 @@ const S: Record<string, CSSProperties> = {
     fontSize: 11,
     color: 'var(--text3)',
     textAlign: 'right',
-    padding: '8px 10px',
+    padding: '6px 8px',
     borderBottom: '1px solid var(--border)',
     cursor: 'pointer',
     whiteSpace: 'nowrap',
   },
   tr: {
     cursor: 'pointer',
+    height: 32,
   },
   trAlt: {
     background: 'rgba(255,255,255,0.015)',
@@ -739,9 +757,9 @@ const S: Record<string, CSSProperties> = {
   td: {
     fontSize: 12,
     color: 'var(--text2)',
-    padding: '8px 10px',
+    padding: '4px 8px',
     borderBottom: '1px solid var(--border)',
-    maxWidth: 240,
+    maxWidth: 200,
     whiteSpace: 'nowrap',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
@@ -749,19 +767,19 @@ const S: Record<string, CSSProperties> = {
   tdActions: {
     fontSize: 12,
     color: 'var(--text2)',
-    padding: '4px 10px',
+    padding: '2px 8px',
     borderBottom: '1px solid var(--border)',
     whiteSpace: 'nowrap',
   },
   actionButtons: {
     display: 'flex',
-    gap: 4,
+    gap: 2,
   },
   editInput: {
     width: '100%',
-    fontSize: 12,
-    padding: '4px 6px',
-    borderRadius: 4,
+    fontSize: 11,
+    padding: '2px 4px',
+    borderRadius: 3,
     border: '1px solid var(--accent)',
     background: 'var(--surface)',
     color: 'var(--text)',
@@ -769,9 +787,9 @@ const S: Record<string, CSSProperties> = {
   },
   editSelect: {
     width: '100%',
-    fontSize: 12,
-    padding: '4px 6px',
-    borderRadius: 4,
+    fontSize: 11,
+    padding: '2px 4px',
+    borderRadius: 3,
     border: '1px solid var(--accent)',
     background: 'var(--surface)',
     color: 'var(--text)',

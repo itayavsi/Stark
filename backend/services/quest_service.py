@@ -238,6 +238,18 @@ def update_quest_priority(quest_id: str, priority: str):
     return update_quest(quest_id, {"priority": priority})
 
 
+def update_quest_fields(quest_id: str, fields: dict):
+    allowed_fields = {"title", "status", "priority", "assigned_user", "group", "year", "date"}
+    update_data = {k: v for k, v in fields.items() if k in allowed_fields}
+    if not update_data:
+        return None
+    
+    if "status" in update_data:
+        return update_quest_status(quest_id, update_data.pop("status"))
+    
+    return update_quest(quest_id, update_data)
+
+
 def get_saved_quest_sort(group: str, view: str):
     return []
 

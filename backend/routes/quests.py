@@ -17,6 +17,7 @@ from services.quest_service import (
     save_saved_quest_sort,
     take_quest,
     transfer_external_quest_to_local,
+    update_quest_fields,
     update_quest_priority,
     update_quest_status,
 )
@@ -98,6 +99,14 @@ def set_priority(quest_id: str, priority: str = Body(..., embed=True)):
     if priority not in valid:
         raise HTTPException(status_code=400, detail="Invalid priority")
     result = update_quest_priority(quest_id, priority)
+    if not result:
+        raise HTTPException(status_code=404, detail="Quest not found")
+    return result
+
+
+@router.patch("/{quest_id}")
+def update_quest(quest_id: str, fields: dict = Body(...)):
+    result = update_quest_fields(quest_id, fields)
     if not result:
         raise HTTPException(status_code=404, detail="Quest not found")
     return result
