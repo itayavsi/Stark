@@ -11,8 +11,10 @@ from pyproj import CRS, Transformer
 from shapely.ops import unary_union
 
 from services.geometry_storage import (
+    get_finished_geometry_records,
     get_geometry_by_quest_id,
     get_ready_geometry_records,
+    move_geometry_to_finished,
     upsert_quest_geometry,
 )
 from services.storage import get_quest_by_id
@@ -324,3 +326,50 @@ def save_quest_polygon_geometry(quest_id: str, uploads: List[Dict[str, Any]]) ->
     if geometry is None:
         raise RuntimeError("Failed to save polygon geometry")
     return geometry
+
+
+def complete_quest_geometry(quest_id: str, accuracy_xy: float, accuracy_z: float) -> Dict[str, Any]:
+    result = move_geometry_to_finished(quest_id, accuracy_xy, accuracy_z)
+    if result is None:
+        raise LookupError("Quest not found or has no geometry")
+    return result
+
+
+def get_finished_geometry_catalog(group: str | None = None) -> Dict[str, Any]:
+    records = get_finished_geometry_records(group=group)
+    point_features: List[Dict[str, Any]] = []
+    polygon_features: List[Dict[str, Any]] = []
+    quest_types = sorted(
+        {
+            str(record.get("quest_type") or record.get("ft") or "Unknown")
+            for record in records
+        }
+    )
+
+    for record in records:
+        feature_collection = record.get("feature_collection") or _empty_feature_collection()
+        features = feature_collection.get("features") or []
+        properties = _quest_feature_properties(record)
+
+        for index, feature in enumerate(features):
+            if not feature.get("geometry"):
+                continue
+            next_feature = {
+                "type": "Feature",
+                "properties": {
+                    **properties,
+                    **(feature.get("properties") or {}),
+                    "feature_index": index,
+                },
+                "geometry": feature["geometry"],
+            }
+            if record.get("geometry_type") == "polygon":
+                polygon_features.append(next_feature)
+            else:
+                point_features.append(next_feature)
+
+    return {
+        "quest_types": quest_types,
+        "points": {"type": "FeatureCollection", "features": point_features},
+        "polygons": {"type": "FeatureCollection", "features": polygon_features},
+    }

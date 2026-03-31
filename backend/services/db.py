@@ -228,6 +228,35 @@ def init_db() -> None:
                 """
             )
             cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS finished_quest_geometries (
+                    quest_id UUID PRIMARY KEY,
+                    geometry_type TEXT NULL CHECK (geometry_type IN ('point', 'polygon')),
+                    geometry_status TEXT NOT NULL DEFAULT 'ready'
+                        CHECK (geometry_status IN ('ready')),
+                    geometry_geojson JSONB NULL,
+                    source_path TEXT NULL,
+                    source_name TEXT NULL,
+                    upload_kind TEXT NULL,
+                    feature_count INTEGER NOT NULL DEFAULT 0,
+                    utm_zone INTEGER NULL,
+                    utm_band TEXT NULL,
+                    utm_easting DOUBLE PRECISION NULL,
+                    utm_northing DOUBLE PRECISION NULL,
+                    accuracy_xy DOUBLE PRECISION NOT NULL,
+                    accuracy_z DOUBLE PRECISION NOT NULL,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+                """
+            )
+            cur.execute(
+                """
+                CREATE INDEX IF NOT EXISTS finished_quest_geometries_geometry_type_idx
+                ON finished_quest_geometries (geometry_type);
+                """
+            )
+            cur.execute(
                 f"""
                 INSERT INTO {FINISHED_QUESTS_TABLE} (
                     id, title, description, status, "תעדוף", date, assigned_user,

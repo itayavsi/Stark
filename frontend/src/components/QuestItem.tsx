@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent, type CSSProperties, type MouseEvent } from 'react';
 import {
+  completeQuestWithAccuracy,
   setQuestPriority,
   setQuestStatus,
   takeQuest,
@@ -8,6 +9,7 @@ import {
 import { ftColor } from '../services/ftConfig';
 import type { GeometryCatalog, Quest, QuestGeometryRecord, User } from '../types/domain';
 import { getQuestDisplayStatus, isLowPriorityQuest } from '../utils/quests';
+import AccuracyModal from './AccuracyModal';
 import QuestGeometryEditor from './QuestGeometryEditor';
 
 const STATUS_MAP = {
@@ -40,6 +42,7 @@ export default function QuestItem({
   const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ text: string; type: MessageType }>({ text: '', type: 'info' });
+  const [showAccuracyModal, setShowAccuracyModal] = useState(false);
   const clearMessageTimeout = useRef<number | null>(null);
 
   const role = user?.role || 'Viewer';
@@ -57,6 +60,7 @@ export default function QuestItem({
     : quest.geometry_type === 'polygon'
       ? 'Polygon'
       : 'No geometry';
+  const canComplete = !isViewer && !isExternalQuest && quest.geometry_type && (quest.geometry_status === 'ready' || quest.geometry_status === 'pending');
 
   useEffect(() => {
     return () => {
@@ -146,6 +150,19 @@ export default function QuestItem({
     );
   };
 
+  const handleComplete = async (accuracyXy: number, accuracyZ: number) => {
+    setShowAccuracyModal(false);
+    setBusy(true);
+    try {
+      await completeQuestWithAccuracy(quest.id, accuracyXy, accuracyZ);
+      showMsg('✓ המשימה הושלמה בהצלחה', 'success');
+      await onRefresh();
+    } catch {
+      showMsg('✗ שגיאה בהשלמת המשימה', 'error');
+    }
+    setBusy(false);
+  };
+
   const msgColor: Record<MessageType, string> = { success:'var(--green)', error:'var(--red)', warning:'var(--orange)', info:'var(--accent)' };
 
   return (
@@ -222,6 +239,17 @@ export default function QuestItem({
               <span style={S.transferState}>כבר הועבר למאגר הפתוחות</span>
             )}
 
+            {/* Complete with accuracy */}
+            {canComplete && quest.status !== 'Done' && quest.status !== 'Approved' && (
+              <button
+                className="btn btn-success btn-sm"
+                onClick={(e) => { e.stopPropagation(); setShowAccuracyModal(true); }}
+                disabled={busy}
+              >
+                ✓ השלם עם דיוק
+              </button>
+            )}
+
           </div>
 
           {/* Status selector for Team Leader */}
@@ -278,6 +306,14 @@ export default function QuestItem({
           )}
 
         </div>
+      )}
+
+      {showAccuracyModal && (
+        <AccuracyModal
+          questTitle={quest.title}
+          onConfirm={handleComplete}
+          onCancel={() => setShowAccuracyModal(false)}
+        />
       )}
     </div>
   );

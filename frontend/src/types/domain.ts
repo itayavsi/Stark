@@ -157,6 +157,8 @@ export interface QuestGeometryRecord {
   utm_easting?: number | null;
   utm_northing?: number | null;
   updated_at?: string | null;
+  accuracy_xy?: number | null;
+  accuracy_z?: number | null;
 }
 
 export interface LayerFilters {

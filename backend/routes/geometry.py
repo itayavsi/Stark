@@ -1,7 +1,9 @@
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, Body, File, HTTPException, UploadFile
 
 from models.geometry import QuestPointGeometryCreate
 from services.geometry_service import (
+    complete_quest_geometry,
+    get_finished_geometry_catalog,
     get_geometry_catalog,
     get_quest_geometry,
     save_quest_point_geometry,
@@ -14,6 +16,11 @@ router = APIRouter()
 @router.get("/catalog")
 def geometry_catalog(group: str | None = None, status: str | None = None):
     return get_geometry_catalog(group=group, status=status)
+
+
+@router.get("/finished-catalog")
+def finished_geometry_catalog(group: str | None = None):
+    return get_finished_geometry_catalog(group=group)
 
 
 @router.get("/quests/{quest_id}")
@@ -53,5 +60,15 @@ async def upload_quest_polygon_geometry(quest_id: str, files: list[UploadFile] =
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.post("/quests/{quest_id}/complete")
+def complete_quest(quest_id: str, accuracy_xy: float = Body(...), accuracy_z: float = Body(...)):
+    try:
+        return complete_quest_geometry(quest_id, accuracy_xy, accuracy_z)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc

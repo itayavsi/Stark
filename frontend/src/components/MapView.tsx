@@ -683,6 +683,7 @@ const S: Record<string, CSSProperties> = {
   },
   panel: {
     position: 'absolute',
+    scrollbarWidth:'none',
     top: 60,
     left: 12,
     zIndex: 20,

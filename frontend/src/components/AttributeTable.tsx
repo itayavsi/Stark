@@ -4,11 +4,13 @@ import type { LayerFilters, Quest, QuestPriority, QuestStatus } from '../types/d
 
 interface AttributeTableProps {
   quests: Quest[];
+  finishedQuests?: Quest[];
   filters: LayerFilters;
   onClose: () => void;
   onShowQuest?: (quest: Quest) => void;
   onUpdateQuest?: (quest: Quest) => Promise<void>;
   onAddGeometry?: (questId: string, file: File, type: 'points' | 'shp') => Promise<void>;
+  onRefreshFinished?: () => Promise<unknown>;
 }
 
 type EditableField = 'title' | 'status' | 'priority' | 'assigned_user' | 'group' | 'year' | 'date';
@@ -19,7 +21,9 @@ interface SqlFilter {
   value: string;
 }
 
-const COLUMNS: Array<{ key: keyof Quest | 'geometry_summary'; label: string; editable?: boolean }> = [
+type ViewMode = 'all' | 'active' | 'finished';
+
+const COLUMNS: Array<{ key: keyof Quest | 'geometry_summary' | 'accuracy_xy' | 'accuracy_z'; label: string; editable?: boolean }> = [
   { key: 'title', label: 'כותרת', editable: true },
   { key: 'quest_type', label: 'סוג משימה' },
   { key: 'status', label: 'סטטוס', editable: true },
@@ -33,18 +37,51 @@ const COLUMNS: Array<{ key: keyof Quest | 'geometry_summary'; label: string; edi
   { key: 'geometry_summary', label: 'מקור / מידע' },
 ];
 
+const FINISHED_COLUMNS: Array<{ key: keyof Quest | 'geometry_summary' | 'accuracy_xy' | 'accuracy_z'; label: string; editable?: boolean }> = [
+  { key: 'title', label: 'כותרת', editable: true },
+  { key: 'quest_type', label: 'סוג משימה', editable: true },
+  { key: 'status', label: 'סטטוס', editable: true },
+  { key: 'priority', label: 'תעדוף', editable: true },
+  { key: 'group', label: 'קבוצה', editable: true },
+  { key: 'year', label: 'שנה', editable: true },
+  { key: 'assigned_user', label: 'משויך', editable: true },
+  { key: 'date', label: 'תאריך', editable: true },
+  { key: 'geometry_type', label: 'סוג גיאומטריה' },
+  { key: 'accuracy_xy', label: 'דיוק XY (ס"מ)' },
+  { key: 'accuracy_z', label: 'דיוק Z (ס"מ)' },
+  { key: 'geometry_summary', label: 'מקור / מידע' },
+];
+
+const ALL_COLUMNS: Array<{ key: keyof Quest | 'geometry_summary' | 'accuracy_xy' | 'accuracy_z'; label: string; editable?: boolean }> = [
+  { key: 'title', label: 'כותרת', editable: true },
+  { key: 'quest_type', label: 'סוג משימה', editable: true },
+  { key: 'status', label: 'סטטוס', editable: true },
+  { key: 'priority', label: 'תעדוף', editable: true },
+  { key: 'group', label: 'קבוצה', editable: true },
+  { key: 'year', label: 'שנה', editable: true },
+  { key: 'assigned_user', label: 'משויך', editable: true },
+  { key: 'date', label: 'תאריך', editable: true },
+  { key: 'geometry_type', label: 'סוג גיאומטריה' },
+  { key: 'geometry_status', label: 'סטטוס גיאומטריה' },
+  { key: 'accuracy_xy', label: 'דיוק XY (ס"מ)' },
+  { key: 'accuracy_z', label: 'דיוק Z (ס"מ)' },
+  { key: 'geometry_summary', label: 'מקור / מידע' },
+];
+
 const STATUS_OPTIONS: QuestStatus[] = ['Open', 'Taken', 'In Progress', 'Done', 'Approved', 'Stopped', 'Cancelled', 'ממתין'];
 const PRIORITY_OPTIONS: QuestPriority[] = ['גבוה', 'רגיל', 'נמוך'];
 
 export default function AttributeTable({
   quests,
+  finishedQuests = [],
   filters,
   onClose,
   onShowQuest,
   onUpdateQuest,
   onAddGeometry,
+  onRefreshFinished,
 }: AttributeTableProps) {
-  const [sortCol, setSortCol] = useState<(typeof COLUMNS)[number]['key']>('title');
+  const [sortCol, setSortCol] = useState<keyof Quest>('title');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [search, setSearch] = useState('');
   const [selectedQuestId, setSelectedQuestId] = useState<string | null>(null);
@@ -59,6 +96,22 @@ export default function AttributeTable({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadQuestId, setUploadQuestId] = useState<string | null>(null);
   const [uploadType, setUploadType] = useState<'points' | 'shp'>('points');
+  const [viewMode, setViewMode] = useState<ViewMode>('all');
+
+  const getCurrentColumns = (): typeof COLUMNS => {
+    switch (viewMode) {
+      case 'active':
+        return COLUMNS;
+      case 'finished':
+        return FINISHED_COLUMNS;
+      case 'all':
+      default:
+        return ALL_COLUMNS;
+    }
+  };
+
+  const currentColumns = getCurrentColumns();
+  const currentQuests = viewMode === 'finished' ? finishedQuests : viewMode === 'active' ? quests : [...quests, ...finishedQuests];
 
   useEffect(() => {
     if (isMaximized) {
@@ -73,12 +126,12 @@ export default function AttributeTable({
 
   const rows = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
-    let filtered = quests.filter((quest) => {
+    let filtered = currentQuests.filter((quest) => {
       if (!normalizedSearch && sqlFilters.length === 0) {
         return true;
       }
 
-      const matchesSearch = !normalizedSearch || COLUMNS.some((column) =>
+      const matchesSearch = !normalizedSearch || currentColumns.some((column) =>
         String(getColumnValue(quest, column.key)).toLowerCase().includes(normalizedSearch)
       );
 
@@ -110,29 +163,39 @@ export default function AttributeTable({
     });
 
     filtered.sort((left, right) => {
-      const leftValue = String(getColumnValue(left, sortCol));
-      const rightValue = String(getColumnValue(right, sortCol));
+      const leftValue = String(getColumnValue(left, sortCol as keyof Quest | 'geometry_summary' | 'accuracy_xy' | 'accuracy_z'));
+      const rightValue = String(getColumnValue(right, sortCol as keyof Quest | 'geometry_summary' | 'accuracy_xy' | 'accuracy_z'));
       const comparison = leftValue.localeCompare(rightValue, 'he');
       return sortDir === 'asc' ? comparison : -comparison;
     });
 
     return filtered;
-  }, [quests, search, sortCol, sortDir, sqlFilters]);
+  }, [currentQuests, currentColumns, search, sortCol, sortDir, sqlFilters]);
 
   const visibleQuestTypes = Object.entries(filters.questTypes)
     .filter(([, visible]) => visible)
     .map(([questType]) => questType);
 
   const exportCsv = () => {
-    const header = COLUMNS.map((column) => column.label).join(',');
-    const body = rows.map((quest) => COLUMNS.map((column) => csvCell(getColumnValue(quest, column.key))).join(',')).join('\n');
+    const header = currentColumns.map((column) => column.label).join(',');
+    const body = rows.map((quest) => currentColumns.map((column) => csvCell(getColumnValue(quest, column.key))).join(',')).join('\n');
     const blob = new Blob(['\uFEFF' + header + '\n' + body], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'quest-attributes.csv';
+    link.download = `${viewMode === 'finished' ? 'finished-' : ''}quest-attributes.csv`;
     link.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleViewModeChange = (mode: ViewMode) => {
+    setViewMode(mode);
+    if (mode === 'finished' && onRefreshFinished) {
+      void onRefreshFinished();
+    }
+    setSortCol('title');
+    setSearch('');
+    setSqlFilters([]);
   };
 
   const handleZoomIn = () => setZoomLevel((prev) => Math.max(prev - 10, 70));
@@ -232,12 +295,35 @@ export default function AttributeTable({
       <div style={S.header}>
         <div style={S.headerBlock}>
           <span style={S.title}>טבלת מאפיינים</span>
-          <span style={S.count}>{rows.length} / {quests.length} משימות</span>
+          <span style={S.count}>{rows.length} / {quests.length + finishedQuests.length} משימות</span>
           {sqlFilters.length > 0 && (
             <span style={S.sqlBadge}>SQL: {sqlFilters.length}</span>
           )}
         </div>
         <div style={S.headerActions}>
+          <div style={S.viewToggle}>
+            <button
+              style={{ ...S.viewToggleBtn, ...(viewMode === 'all' ? S.viewToggleBtnActive : {}) }}
+              onClick={() => handleViewModeChange('all')}
+              type="button"
+            >
+              הכל
+            </button>
+            <button
+              style={{ ...S.viewToggleBtn, ...(viewMode === 'active' ? S.viewToggleBtnActive : {}) }}
+              onClick={() => handleViewModeChange('active')}
+              type="button"
+            >
+              פעילות
+            </button>
+            <button
+              style={{ ...S.viewToggleBtn, ...(viewMode === 'finished' ? S.viewToggleBtnActive : {}) }}
+              onClick={() => handleViewModeChange('finished')}
+              type="button"
+            >
+              הושלמו
+            </button>
+          </div>
           <div style={S.zoomControls}>
             <button className="btn btn-ghost btn-sm" type="button" onClick={handleZoomOut} title="הקטן">
               −
@@ -359,7 +445,7 @@ export default function AttributeTable({
           <thead>
             <tr>
               <th style={{ ...S.th, width: 140 }}>פעולות</th>
-              {COLUMNS.map((column) => (
+              {currentColumns.map((column) => (
                 <th
                   key={column.key}
                   style={S.th}
@@ -368,7 +454,7 @@ export default function AttributeTable({
                       setSortDir((current) => current === 'asc' ? 'desc' : 'asc');
                       return;
                     }
-                    setSortCol(column.key);
+                    setSortCol(column.key as keyof Quest);
                     setSortDir('asc');
                   }}
                 >
@@ -423,7 +509,7 @@ export default function AttributeTable({
                       >
                         ✎
                       </button>
-                      {!quest.geometry_type && onAddGeometry && (
+                      {viewMode !== 'finished' && !quest.geometry_type && onAddGeometry && (
                         <>
                           <button
                             className="btn btn-ghost btn-sm"
@@ -446,8 +532,8 @@ export default function AttributeTable({
                     </div>
                   )}
                 </td>
-                {COLUMNS.map((column) => (
-                  <td key={column.key} style={S.td} title={String(getColumnValue(quest, column.key))}>
+                {currentColumns.map((column) => (
+                  <td key={column.key} style={S.td} title={String(getColumnValue(quest, column.key as keyof Quest | 'geometry_summary' | 'accuracy_xy' | 'accuracy_z'))}>
                     {editingRowId === quest.id && column.editable ? (
                       <EditableCell
                         field={column.key as EditableField}
@@ -455,7 +541,7 @@ export default function AttributeTable({
                         onChange={(value) => setEditedQuest((prev) => prev ? { ...prev, [column.key]: value } : null)}
                       />
                     ) : (
-                      formatCell(getColumnValue(quest, column.key))
+                      formatCell(getColumnValue(quest, column.key as keyof Quest | 'geometry_summary' | 'accuracy_xy' | 'accuracy_z'))
                     )}
                   </td>
                 ))}
@@ -530,7 +616,7 @@ function EditableCell({
   );
 }
 
-function getColumnValue(quest: Quest, key: (typeof COLUMNS)[number]['key']): string | number {
+function getColumnValue(quest: Quest, key: keyof Quest | 'geometry_summary' | 'accuracy_xy' | 'accuracy_z'): string | number {
   if (key === 'geometry_summary') {
     return quest.geometry_source_name || quest.geometry_source_path || '—';
   }
@@ -555,7 +641,15 @@ function getColumnValue(quest: Quest, key: (typeof COLUMNS)[number]['key']): str
         return 'חסר';
     }
   }
-  const value = quest[key];
+  if (key === 'accuracy_xy') {
+    const val = (quest as Quest & { accuracy_xy?: number | null }).accuracy_xy;
+    return val != null ? val.toFixed(2) : '—';
+  }
+  if (key === 'accuracy_z') {
+    const val = (quest as Quest & { accuracy_z?: number | null }).accuracy_z;
+    return val != null ? val.toFixed(2) : '—';
+  }
+  const value = quest[key as keyof Quest];
   if (typeof value === 'boolean') {
     return value ? 'כן' : 'לא';
   }
@@ -622,6 +716,28 @@ const S: Record<string, CSSProperties> = {
     color: 'var(--text2)',
     minWidth: 40,
     textAlign: 'center',
+  },
+  viewToggle: {
+    display: 'flex',
+    background: 'var(--surface2)',
+    borderRadius: 8,
+    padding: 2,
+    gap: 2,
+  },
+  viewToggleBtn: {
+    fontSize: 11,
+    padding: '4px 10px',
+    borderRadius: 6,
+    border: 'none',
+    background: 'transparent',
+    color: 'var(--text2)',
+    cursor: 'pointer',
+    fontFamily: 'var(--font)',
+    transition: 'all 0.15s',
+  },
+  viewToggleBtnActive: {
+    background: 'var(--accent)',
+    color: '#fff',
   },
   search: {
     width: 200,

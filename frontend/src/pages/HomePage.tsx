@@ -5,7 +5,7 @@ import MapView from '../components/MapView';
 import Navbar from '../components/Navbar';
 import QuestPanel from '../components/QuestPanel';
 import { useQuests } from '../hooks/useQuests';
-import { getGeometryCatalog, updateQuest, uploadQuestPointsGeometry, uploadQuestPolygonGeometry } from '../services/api';
+import { getFinishedGeometryCatalog, getGeometryCatalog, updateQuest, uploadQuestPointsGeometry, uploadQuestPolygonGeometry } from '../services/api';
 import { getFeaturePoint, getQuestGeometryBounds } from '../utils/geo';
 import type { GeometryCatalog, LayerFilters, LngLatPoint, MapBounds, Quest } from '../types/domain';
 
@@ -36,6 +36,7 @@ export default function HomePage() {
   const [jumpMarker, setJumpMarker] = useState<LngLatPoint | null>(null);
   const [focusBounds, setFocusBounds] = useState<MapBounds | null>(null);
   const [geometryCatalog, setGeometryCatalog] = useState<GeometryCatalog>(createEmptyGeometryCatalog());
+  const [finishedGeometryCatalog, setFinishedGeometryCatalog] = useState<GeometryCatalog>(createEmptyGeometryCatalog());
   const [tableHeight, setTableHeight] = useState(260);
   const [dragTable, setDragTable] = useState(false);
   const dragTableStartY = useRef(0);
@@ -51,7 +52,11 @@ export default function HomePage() {
   });
 
   const localQuests = useMemo(
-    () => quests.filter((quest) => !quest.id.startsWith('external:')),
+    () => quests.filter((quest) => !quest.id.startsWith('external:') && quest.status !== 'Done' && quest.status !== 'Approved'),
+    [quests],
+  );
+  const finishedQuests = useMemo(
+    () => quests.filter((quest) => !quest.id.startsWith('external:') && (quest.status === 'Done' || quest.status === 'Approved')),
     [quests],
   );
   const tableOpen = layerFilters.showPoints || layerFilters.showPolygons;
@@ -80,6 +85,18 @@ export default function HomePage() {
     const [, catalog] = await Promise.all([refresh(), loadGeometryCatalog()]);
     return catalog;
   }, [loadGeometryCatalog, refresh]);
+
+  const loadFinishedGeometryCatalog = useCallback(async () => {
+    try {
+      const catalog = await getFinishedGeometryCatalog();
+      setFinishedGeometryCatalog(catalog);
+      return catalog;
+    } catch {
+      const emptyCatalog = createEmptyGeometryCatalog();
+      setFinishedGeometryCatalog(emptyCatalog);
+      return emptyCatalog;
+    }
+  }, []);
 
   useEffect(() => {
     void loadGeometryCatalog();
@@ -255,11 +272,13 @@ export default function HomePage() {
               <div style={S.tableContent}>
                 <AttributeTable
                   quests={localQuests}
+                  finishedQuests={finishedQuests}
                   filters={layerFilters}
                   onClose={() => setLayerFilters((current) => ({ ...current, showPoints: false, showPolygons: false }))}
                   onShowQuest={handleShowQuestOnMap}
                   onUpdateQuest={handleUpdateQuest}
                   onAddGeometry={handleAddGeometry}
+                  onRefreshFinished={loadFinishedGeometryCatalog}
                 />
               </div>
             </div>

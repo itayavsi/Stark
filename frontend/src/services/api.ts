@@ -92,6 +92,12 @@ export const uploadQuestPolygonGeometry = (questId: string, files: File[]) => {
     .then((response) => response.data);
 };
 
+export const completeQuestWithAccuracy = (questId: string, accuracy_xy: number, accuracy_z: number) =>
+  api.post<QuestGeometryRecord>(`/geometry/quests/${encodeQuestId(questId)}/complete`, { accuracy_xy, accuracy_z }).then((response) => response.data);
+
+export const getFinishedGeometryCatalog = () =>
+  api.get<GeometryCatalog>('/geometry/finished-catalog').then((response) => response.data);
+
 export const getUsers = () =>
   api.get<User[]>('/users/').then((response) => response.data);
 
