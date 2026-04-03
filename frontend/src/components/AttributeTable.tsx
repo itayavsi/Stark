@@ -615,7 +615,9 @@ export default function AttributeTable({
                     {editingRowId === quest.id && column.editable ? (
                       <EditableCell
                         field={column.key as EditableField}
-                        value={editedQuest?.[column.key as keyof Quest] ?? ''}
+                        value={Array.isArray(editedQuest?.[column.key as keyof Quest]) 
+                          ? (editedQuest?.[column.key as keyof Quest] as unknown[]).join(',')
+                          : String(editedQuest?.[column.key as keyof Quest] ?? '')}
                         onChange={(value) => setEditedQuest((prev) => prev ? { ...prev, [column.key]: value } : null)}
                       />
                     ) : (
@@ -711,10 +713,17 @@ function getColumnValue(quest: Quest, key: keyof Quest | 'geometry_summary' | 'a
     return quest.geometry_source_name || quest.geometry_source_path || '—';
   }
   if (key === 'geometry_type') {
-    if (quest.geometry_type === 'point') {
+    const gt = quest.geometry_type;
+    if (Array.isArray(gt)) {
+      const labels = [];
+      if (gt.includes('point')) labels.push('Point');
+      if (gt.includes('polygon')) labels.push('Polygon');
+      return labels.length > 0 ? labels.join('+') : '—';
+    }
+    if (gt === 'point') {
       return 'Point';
     }
-    if (quest.geometry_type === 'polygon') {
+    if (gt === 'polygon') {
       return 'Polygon';
     }
     return '—';
@@ -742,6 +751,9 @@ function getColumnValue(quest: Quest, key: keyof Quest | 'geometry_summary' | 'a
   const value = quest[key as keyof Quest];
   if (typeof value === 'boolean') {
     return value ? 'כן' : 'לא';
+  }
+  if (Array.isArray(value)) {
+    return value.join(', ');
   }
   return String(value ?? '—');
 }

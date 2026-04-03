@@ -58,12 +58,19 @@ export default function QuestItem({
   const isExternalQuest = quest.id.startsWith('external:');
   const canTransferToOpen = isExternalQuest && !quest.isTransferred && !isViewer;
   const matziahLabel = quest.matziah ? `מצייח ${quest.matziah}` : null;
-  const geometryLabel = quest.geometry_type === 'point'
-    ? 'Point'
-    : quest.geometry_type === 'polygon'
-      ? 'Polygon'
-      : 'No geometry';
-  const canComplete = !isViewer && !isExternalQuest && quest.geometry_type && (quest.geometry_status === 'ready' || quest.geometry_status === 'pending');
+  const getGeometryLabel = (types: typeof quest.geometry_type) => {
+    if (!types) return 'No geometry';
+    if (Array.isArray(types)) {
+      const labels = [];
+      if (types.includes('point')) labels.push('Point');
+      if (types.includes('polygon')) labels.push('Polygon');
+      return labels.length > 0 ? labels.join('+') : 'No geometry';
+    }
+    return types === 'point' ? 'Point' : types === 'polygon' ? 'Polygon' : 'No geometry';
+  };
+  const geometryLabel = getGeometryLabel(quest.geometry_type);
+  const hasGeometry = !!quest.geometry_type && (quest.geometry_status === 'ready' || quest.geometry_status === 'pending');
+  const canComplete = !isViewer && !isExternalQuest && hasGeometry;
 
   useEffect(() => {
     return () => {
@@ -148,6 +155,12 @@ export default function QuestItem({
         geometry_source_path: geometry.source_path,
         geometry_source_name: geometry.source_name,
         geometry_feature_count: geometry.feature_count,
+        has_point: Array.isArray(geometry.geometry_type) 
+          ? geometry.geometry_type.includes('point')
+          : geometry.geometry_type === 'point',
+        has_polygon: Array.isArray(geometry.geometry_type) 
+          ? geometry.geometry_type.includes('polygon')
+          : geometry.geometry_type === 'polygon',
       },
       catalog || null,
     );

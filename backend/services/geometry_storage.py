@@ -48,10 +48,21 @@ def _normalize_timestamp(value: Any) -> str | None:
 
 
 def _normalize_geometry_row(row: Dict) -> Dict:
-    feature_collection = row["geometry_geojson"]
-    if isinstance(feature_collection, str):
-        feature_collection = json.loads(feature_collection)
-
+    geometry_geojson = row.get("geometry_geojson")
+    point_geojson = row.get("point_geojson")
+    polygon_geojson = row.get("polygon_geojson")
+    
+    if isinstance(geometry_geojson, str):
+        geometry_geojson = json.loads(geometry_geojson)
+    if isinstance(point_geojson, str):
+        point_geojson = json.loads(point_geojson)
+    if isinstance(polygon_geojson, str):
+        polygon_geojson = json.loads(polygon_geojson)
+    
+    geometry_type = row.get("geometry_type")
+    if geometry_type and not isinstance(geometry_type, list):
+        geometry_type = [geometry_type]
+    
     result = {
         "quest_id": str(row["quest_id"]),
         "title": row["title"],
@@ -65,13 +76,17 @@ def _normalize_geometry_row(row: Dict) -> Dict:
         "ft": row["ft"],
         "quest_type": row["ft"],
         "matziah": row["matziah"],
-        "geometry_type": row["geometry_type"],
+        "geometry_type": geometry_type,
         "geometry_status": row["geometry_status"],
         "source_path": row["source_path"],
         "source_name": row["source_name"],
         "upload_kind": row["upload_kind"],
         "feature_count": row["feature_count"] or 0,
-        "feature_collection": feature_collection,
+        "feature_collection": geometry_geojson,
+        "point_geojson": point_geojson,
+        "polygon_geojson": polygon_geojson,
+        "point_feature_count": row.get("point_feature_count") or 0,
+        "polygon_feature_count": row.get("polygon_feature_count") or 0,
         "utm_zone": row["utm_zone"],
         "utm_band": row["utm_band"],
         "utm_easting": row["utm_easting"],
@@ -114,6 +129,10 @@ def get_geometry_by_quest_id(quest_id: str) -> Optional[Dict]:
                     g.upload_kind,
                     COALESCE(g.feature_count, 0) AS feature_count,
                     g.geometry_geojson,
+                    g.point_geojson,
+                    g.polygon_geojson,
+                    COALESCE(g.point_feature_count, 0) AS point_feature_count,
+                    COALESCE(g.polygon_feature_count, 0) AS polygon_feature_count,
                     g.utm_zone,
                     g.utm_band,
                     g.utm_easting,
@@ -134,8 +153,8 @@ def get_geometry_by_quest_id(quest_id: str) -> Optional[Dict]:
 def get_ready_geometry_records(group: str | None = None, status: str | None = None) -> List[Dict]:
     where_clauses = [
         "g.geometry_type IS NOT NULL",
-        "g.geometry_geojson IS NOT NULL",
         "g.geometry_status = 'ready'",
+        "(g.geometry_geojson IS NOT NULL OR g.point_geojson IS NOT NULL OR g.polygon_geojson IS NOT NULL)",
     ]
     params: Dict[str, Any] = {}
 
@@ -171,6 +190,10 @@ def get_ready_geometry_records(group: str | None = None, status: str | None = No
                     g.upload_kind,
                     COALESCE(g.feature_count, 0) AS feature_count,
                     g.geometry_geojson,
+                    g.point_geojson,
+                    g.polygon_geojson,
+                    COALESCE(g.point_feature_count, 0) AS point_feature_count,
+                    COALESCE(g.polygon_feature_count, 0) AS polygon_feature_count,
                     g.utm_zone,
                     g.utm_band,
                     g.utm_easting,
@@ -187,8 +210,87 @@ def get_ready_geometry_records(group: str | None = None, status: str | None = No
 
 
 def upsert_quest_geometry(quest_id: str, geometry: Dict) -> Optional[Dict]:
+    geometry_type = geometry.get("geometry_type")
+    is_point = geometry_type == "point"
+    is_polygon = geometry_type == "polygon"
+    
     with get_connection() as conn:
         with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT 
+                    geometry_type, 
+                    point_geojson, 
+                    polygon_geojson,
+                    point_feature_count,
+                    polygon_feature_count
+                FROM quest_geometries 
+                WHERE quest_id = %(quest_id)s;
+                """,
+                {"quest_id": quest_id},
+            )
+            existing = cur.fetchone()
+            
+            current_types = existing["geometry_type"] if existing else None
+            if current_types and not isinstance(current_types, list):
+                current_types = [current_types]
+            
+            current_point_geojson = existing["point_geojson"] if existing else None
+            current_polygon_geojson = existing["polygon_geojson"] if existing else None
+            
+            if is_point:
+                new_point_geojson = geometry.get("geometry_geojson")
+                if new_point_geojson:
+                    if current_point_geojson:
+                        existing_features = current_point_geojson.get("features", []) if isinstance(current_point_geojson, dict) else []
+                        new_features = new_point_geojson.get("features", []) if isinstance(new_point_geojson, dict) else []
+                        current_point_geojson = {"type": "FeatureCollection", "features": existing_features + new_features}
+                    else:
+                        current_point_geojson = new_point_geojson
+                
+                if current_types is None:
+                    current_types = ["point"]
+                elif "point" not in current_types:
+                    current_types = current_types + ["point"]
+                    
+            elif is_polygon:
+                new_polygon_geojson = geometry.get("geometry_geojson")
+                if new_polygon_geojson:
+                    if current_polygon_geojson:
+                        existing_features = current_polygon_geojson.get("features", []) if isinstance(current_polygon_geojson, dict) else []
+                        new_features = new_polygon_geojson.get("features", []) if isinstance(new_polygon_geojson, dict) else []
+                        current_polygon_geojson = {"type": "FeatureCollection", "features": existing_features + new_features}
+                    else:
+                        current_polygon_geojson = new_polygon_geojson
+                
+                if current_types is None:
+                    current_types = ["polygon"]
+                elif "polygon" not in current_types:
+                    current_types = current_types + ["polygon"]
+            
+            total_feature_count = 0
+            if current_point_geojson and isinstance(current_point_geojson, dict):
+                total_feature_count += len(current_point_geojson.get("features", []))
+            if current_polygon_geojson and isinstance(current_polygon_geojson, dict):
+                total_feature_count += len(current_polygon_geojson.get("features", []))
+            
+            point_feature_count = 0
+            if current_point_geojson and isinstance(current_point_geojson, dict):
+                point_feature_count = len(current_point_geojson.get("features", []))
+            
+            polygon_feature_count = 0
+            if current_polygon_geojson and isinstance(current_polygon_geojson, dict):
+                polygon_feature_count = len(current_polygon_geojson.get("features", []))
+            
+            merged_geojson = None
+            if current_point_geojson or current_polygon_geojson:
+                merged_features = []
+                if current_point_geojson and isinstance(current_point_geojson, dict):
+                    merged_features.extend(current_point_geojson.get("features", []))
+                if current_polygon_geojson and isinstance(current_polygon_geojson, dict):
+                    merged_features.extend(current_polygon_geojson.get("features", []))
+                merged_geojson = {"type": "FeatureCollection", "features": merged_features} if merged_features else None
+            
             cur.execute(
                 """
                 INSERT INTO quest_geometries (
@@ -204,6 +306,10 @@ def upsert_quest_geometry(quest_id: str, geometry: Dict) -> Optional[Dict]:
                     utm_band,
                     utm_easting,
                     utm_northing,
+                    point_geojson,
+                    polygon_geojson,
+                    point_feature_count,
+                    polygon_feature_count,
                     created_at,
                     updated_at
                 )
@@ -220,6 +326,10 @@ def upsert_quest_geometry(quest_id: str, geometry: Dict) -> Optional[Dict]:
                     %(utm_band)s,
                     %(utm_easting)s,
                     %(utm_northing)s,
+                    %(point_geojson)s::jsonb,
+                    %(polygon_geojson)s::jsonb,
+                    %(point_feature_count)s,
+                    %(polygon_feature_count)s,
                     NOW(),
                     NOW()
                 )
@@ -227,32 +337,38 @@ def upsert_quest_geometry(quest_id: str, geometry: Dict) -> Optional[Dict]:
                 DO UPDATE SET
                     geometry_type = EXCLUDED.geometry_type,
                     geometry_status = EXCLUDED.geometry_status,
-                    geometry_geojson = EXCLUDED.geometry_geojson,
-                    source_path = EXCLUDED.source_path,
-                    source_name = EXCLUDED.source_name,
-                    upload_kind = EXCLUDED.upload_kind,
+                    geometry_geojson = COALESCE(EXCLUDED.geometry_geojson, quest_geometries.geometry_geojson),
+                    source_path = COALESCE(EXCLUDED.source_path, quest_geometries.source_path),
+                    source_name = COALESCE(EXCLUDED.source_name, quest_geometries.source_name),
+                    upload_kind = COALESCE(EXCLUDED.upload_kind, quest_geometries.upload_kind),
                     feature_count = EXCLUDED.feature_count,
-                    utm_zone = EXCLUDED.utm_zone,
-                    utm_band = EXCLUDED.utm_band,
-                    utm_easting = EXCLUDED.utm_easting,
-                    utm_northing = EXCLUDED.utm_northing,
+                    utm_zone = COALESCE(EXCLUDED.utm_zone, quest_geometries.utm_zone),
+                    utm_band = COALESCE(EXCLUDED.utm_band, quest_geometries.utm_band),
+                    utm_easting = COALESCE(EXCLUDED.utm_easting, quest_geometries.utm_easting),
+                    utm_northing = COALESCE(EXCLUDED.utm_northing, quest_geometries.utm_northing),
+                    point_geojson = COALESCE(EXCLUDED.point_geojson, quest_geometries.point_geojson),
+                    polygon_geojson = COALESCE(EXCLUDED.polygon_geojson, quest_geometries.polygon_geojson),
+                    point_feature_count = EXCLUDED.point_feature_count,
+                    polygon_feature_count = EXCLUDED.polygon_feature_count,
                     updated_at = NOW();
                 """,
                 {
                     "quest_id": quest_id,
-                    "geometry_type": geometry.get("geometry_type"),
-                    "geometry_status": geometry.get("geometry_status", "missing"),
-                    "geometry_geojson": json.dumps(geometry.get("geometry_geojson"))
-                    if geometry.get("geometry_geojson") is not None
-                    else None,
-                    "source_path": geometry.get("source_path"),
-                    "source_name": geometry.get("source_name"),
-                    "upload_kind": geometry.get("upload_kind"),
-                    "feature_count": geometry.get("feature_count", 0),
-                    "utm_zone": geometry.get("utm_zone"),
-                    "utm_band": geometry.get("utm_band"),
-                    "utm_easting": geometry.get("utm_easting"),
-                    "utm_northing": geometry.get("utm_northing"),
+                    "geometry_type": current_types,
+                    "geometry_status": geometry.get("geometry_status", "ready"),
+                    "geometry_geojson": json.dumps(merged_geojson) if merged_geojson else None,
+                    "source_path": geometry.get("source_path") if is_polygon else None,
+                    "source_name": geometry.get("source_name") if is_polygon else None,
+                    "upload_kind": geometry.get("upload_kind") if is_polygon else None,
+                    "feature_count": total_feature_count,
+                    "utm_zone": geometry.get("utm_zone") if is_point else None,
+                    "utm_band": geometry.get("utm_band") if is_point else None,
+                    "utm_easting": geometry.get("utm_easting") if is_point else None,
+                    "utm_northing": geometry.get("utm_northing") if is_point else None,
+                    "point_geojson": json.dumps(current_point_geojson) if current_point_geojson else None,
+                    "polygon_geojson": json.dumps(current_polygon_geojson) if current_polygon_geojson else None,
+                    "point_feature_count": point_feature_count,
+                    "polygon_feature_count": polygon_feature_count,
                 },
             )
 
@@ -289,6 +405,10 @@ def move_geometry_to_finished(quest_id: str, accuracy_xy: float, accuracy_z: flo
                     utm_band,
                     utm_easting,
                     utm_northing,
+                    point_geojson,
+                    polygon_geojson,
+                    point_feature_count,
+                    polygon_feature_count,
                     accuracy_xy,
                     accuracy_z,
                     created_at,
@@ -307,6 +427,10 @@ def move_geometry_to_finished(quest_id: str, accuracy_xy: float, accuracy_z: flo
                     %(utm_band)s,
                     %(utm_easting)s,
                     %(utm_northing)s,
+                    %(point_geojson)s,
+                    %(polygon_geojson)s,
+                    %(point_feature_count)s,
+                    %(polygon_feature_count)s,
                     %(accuracy_xy)s,
                     %(accuracy_z)s,
                     NOW(),
@@ -325,6 +449,10 @@ def move_geometry_to_finished(quest_id: str, accuracy_xy: float, accuracy_z: flo
                     utm_band = EXCLUDED.utm_band,
                     utm_easting = EXCLUDED.utm_easting,
                     utm_northing = EXCLUDED.utm_northing,
+                    point_geojson = EXCLUDED.point_geojson,
+                    polygon_geojson = EXCLUDED.polygon_geojson,
+                    point_feature_count = EXCLUDED.point_feature_count,
+                    polygon_feature_count = EXCLUDED.polygon_feature_count,
                     accuracy_xy = EXCLUDED.accuracy_xy,
                     accuracy_z = EXCLUDED.accuracy_z,
                     updated_at = NOW();
@@ -342,6 +470,10 @@ def move_geometry_to_finished(quest_id: str, accuracy_xy: float, accuracy_z: flo
                     "utm_band": source_row["utm_band"],
                     "utm_easting": source_row["utm_easting"],
                     "utm_northing": source_row["utm_northing"],
+                    "point_geojson": source_row.get("point_geojson"),
+                    "polygon_geojson": source_row.get("polygon_geojson"),
+                    "point_feature_count": source_row.get("point_feature_count") or 0,
+                    "polygon_feature_count": source_row.get("polygon_feature_count") or 0,
                     "accuracy_xy": accuracy_xy,
                     "accuracy_z": accuracy_z,
                 },
@@ -381,6 +513,10 @@ def get_finished_geometry_by_quest_id(quest_id: str) -> Optional[Dict]:
                     g.upload_kind,
                     COALESCE(g.feature_count, 0) AS feature_count,
                     g.geometry_geojson,
+                    g.point_geojson,
+                    g.polygon_geojson,
+                    COALESCE(g.point_feature_count, 0) AS point_feature_count,
+                    COALESCE(g.polygon_feature_count, 0) AS polygon_feature_count,
                     g.utm_zone,
                     g.utm_band,
                     g.utm_easting,
@@ -433,6 +569,10 @@ def get_finished_geometry_records(group: str | None = None) -> List[Dict]:
                     g.upload_kind,
                     COALESCE(g.feature_count, 0) AS feature_count,
                     g.geometry_geojson,
+                    g.point_geojson,
+                    g.polygon_geojson,
+                    COALESCE(g.point_feature_count, 0) AS point_feature_count,
+                    COALESCE(g.polygon_feature_count, 0) AS polygon_feature_count,
                     g.utm_zone,
                     g.utm_band,
                     g.utm_easting,

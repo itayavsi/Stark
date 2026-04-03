@@ -12,6 +12,12 @@ interface QuestGeometryEditorProps {
   onMessage: (text: string, type: MessageType) => void;
 }
 
+function hasGeometryType(types: GeometryType | GeometryType[] | null | undefined, type: GeometryType): boolean {
+  if (!types) return false;
+  if (Array.isArray(types)) return types.includes(type);
+  return types === type;
+}
+
 export default function QuestGeometryEditor({
   quest,
   disabled = false,
@@ -23,6 +29,9 @@ export default function QuestGeometryEditor({
   const [utm, setUtm] = useState('');
   const [savingPoint, setSavingPoint] = useState(false);
   const [uploadingPolygon, setUploadingPolygon] = useState(false);
+
+  const hasPoint = hasGeometryType(quest.geometry_type, 'point');
+  const hasPolygon = hasGeometryType(quest.geometry_type, 'polygon');
 
   useEffect(() => {
     if (!folderInputRef.current) {
@@ -81,7 +90,12 @@ export default function QuestGeometryEditor({
     <div style={S.wrap} onClick={(event) => event.stopPropagation()}>
       <div style={S.header}>גיאומטריה</div>
       <div style={S.badges}>
-        <span style={S.badge}>סוג: {formatGeometryType(quest.geometry_type)}</span>
+        <span style={{...S.badge, ...(hasPoint ? S.badgeActive : {})}}>
+          📍 נקודה: {hasPoint ? '✓' : '✗'}
+        </span>
+        <span style={{...S.badge, ...(hasPolygon ? S.badgeActive : {})}}>
+          🔷 פוליגון: {hasPolygon ? '✓' : '✗'}
+        </span>
         <span style={S.badge}>סטטוס: {formatGeometryStatus(quest.geometry_status)}</span>
       </div>
 
@@ -95,7 +109,7 @@ export default function QuestGeometryEditor({
           }}
           disabled={disabled || savingPoint}
         >
-          {showPointForm ? '✕ סגור נקודה' : '📍 Add Point'}
+          {showPointForm ? '✕ סגור' : '📍 Add Point'}
         </button>
 
         <label
@@ -152,22 +166,13 @@ export default function QuestGeometryEditor({
 
       <div style={S.help}>
         נקודה: הזן UTM. פוליגון: העלה ZIP או תיקייה עם קבצי shapefile.
+        {hasPoint && hasPolygon && ' (שניהם נשמרו)'}
       </div>
       {quest.geometry_source_path && (
         <div style={S.pathHint}>{quest.geometry_source_path}</div>
       )}
     </div>
   );
-}
-
-function formatGeometryType(value?: string | null) {
-  if (value === 'point') {
-    return 'נקודה';
-  }
-  if (value === 'polygon') {
-    return 'פוליגון';
-  }
-  return 'ללא';
 }
 
 function formatGeometryStatus(value?: string | null) {
@@ -212,6 +217,11 @@ const S: Record<string, CSSProperties> = {
     border: '1px solid var(--border)',
     borderRadius: 999,
     padding: '2px 8px',
+  },
+  badgeActive: {
+    background: 'color-mix(in srgb, var(--green) 14%, var(--surface))',
+    color: 'var(--green)',
+    border: '1px solid color-mix(in srgb, var(--green) 32%, var(--border))',
   },
   actions: {
     display: 'flex',

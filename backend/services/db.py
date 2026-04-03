@@ -212,7 +212,7 @@ def init_db() -> None:
                 """
                 CREATE TABLE IF NOT EXISTS quest_geometries (
                     quest_id UUID PRIMARY KEY,
-                    geometry_type TEXT NULL CHECK (geometry_type IN ('point', 'polygon')),
+                    geometry_type TEXT[] NULL CHECK (geometry_type IS NULL OR geometry_type <@ ARRAY['point', 'polygon']),
                     geometry_status TEXT NOT NULL DEFAULT 'missing'
                         CHECK (geometry_status IN ('missing', 'pending', 'ready', 'error')),
                     geometry_geojson JSONB NULL,
@@ -224,6 +224,10 @@ def init_db() -> None:
                     utm_band TEXT NULL,
                     utm_easting DOUBLE PRECISION NULL,
                     utm_northing DOUBLE PRECISION NULL,
+                    point_geojson JSONB NULL,
+                    polygon_geojson JSONB NULL,
+                    point_feature_count INTEGER NOT NULL DEFAULT 0,
+                    polygon_feature_count INTEGER NOT NULL DEFAULT 0,
                     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
                 );
@@ -232,7 +236,7 @@ def init_db() -> None:
             cur.execute(
                 """
                 CREATE INDEX IF NOT EXISTS quest_geometries_geometry_type_idx
-                ON quest_geometries (geometry_type);
+                ON quest_geometries USING BTREE (geometry_type);
                 """
             )
             cur.execute(
@@ -245,7 +249,7 @@ def init_db() -> None:
                 """
                 CREATE TABLE IF NOT EXISTS finished_quest_geometries (
                     quest_id UUID PRIMARY KEY,
-                    geometry_type TEXT NULL CHECK (geometry_type IN ('point', 'polygon')),
+                    geometry_type TEXT[] NULL CHECK (geometry_type IS NULL OR geometry_type <@ ARRAY['point', 'polygon']),
                     geometry_status TEXT NOT NULL DEFAULT 'ready'
                         CHECK (geometry_status IN ('ready')),
                     geometry_geojson JSONB NULL,
@@ -257,6 +261,10 @@ def init_db() -> None:
                     utm_band TEXT NULL,
                     utm_easting DOUBLE PRECISION NULL,
                     utm_northing DOUBLE PRECISION NULL,
+                    point_geojson JSONB NULL,
+                    polygon_geojson JSONB NULL,
+                    point_feature_count INTEGER NOT NULL DEFAULT 0,
+                    polygon_feature_count INTEGER NOT NULL DEFAULT 0,
                     accuracy_xy DOUBLE PRECISION NOT NULL,
                     accuracy_z DOUBLE PRECISION NOT NULL,
                     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -267,7 +275,81 @@ def init_db() -> None:
             cur.execute(
                 """
                 CREATE INDEX IF NOT EXISTS finished_quest_geometries_geometry_type_idx
-                ON finished_quest_geometries (geometry_type);
+                ON finished_quest_geometries USING BTREE (geometry_type);
+                """
+            )
+            cur.execute(
+                """
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM information_schema.columns 
+                        WHERE table_name = 'quest_geometries' AND column_name = 'point_geojson'
+                    ) THEN
+                        ALTER TABLE quest_geometries 
+                        ADD COLUMN point_geojson JSONB NULL,
+                        ADD COLUMN polygon_geojson JSONB NULL,
+                        ADD COLUMN point_feature_count INTEGER NOT NULL DEFAULT 0,
+                        ADD COLUMN polygon_feature_count INTEGER NOT NULL DEFAULT 0;
+                    END IF;
+                END
+                $$;
+                """
+            )
+            cur.execute(
+                """
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM information_schema.columns 
+                        WHERE table_name = 'finished_quest_geometries' AND column_name = 'point_geojson'
+                    ) THEN
+                        ALTER TABLE finished_quest_geometries 
+                        ADD COLUMN point_geojson JSONB NULL,
+                        ADD COLUMN polygon_geojson JSONB NULL,
+                        ADD COLUMN point_feature_count INTEGER NOT NULL DEFAULT 0,
+                        ADD COLUMN polygon_feature_count INTEGER NOT NULL DEFAULT 0;
+                    END IF;
+                END
+                $$;
+                """
+            )
+            cur.execute(
+                """
+                DO $$
+                BEGIN
+                    IF EXISTS (
+                        SELECT 1 FROM pg_attribute 
+                        WHERE attrelid = 'quest_geometries'::regclass 
+                        AND attname = 'geometry_type' 
+                        AND atttypid = (SELECT oid FROM pg_type WHERE typname = 'text')
+                    ) THEN
+                        ALTER TABLE quest_geometries ADD COLUMN geometry_type_new TEXT[];
+                        UPDATE quest_geometries SET geometry_type_new = CASE WHEN geometry_type IS NULL THEN NULL ELSE ARRAY[geometry_type::text] END;
+                        ALTER TABLE quest_geometries DROP COLUMN geometry_type;
+                        ALTER TABLE quest_geometries RENAME COLUMN geometry_type_new TO geometry_type;
+                    END IF;
+                END
+                $$;
+                """
+            )
+            cur.execute(
+                """
+                DO $$
+                BEGIN
+                    IF EXISTS (
+                        SELECT 1 FROM pg_attribute 
+                        WHERE attrelid = 'finished_quest_geometries'::regclass 
+                        AND attname = 'geometry_type' 
+                        AND atttypid = (SELECT oid FROM pg_type WHERE typname = 'text')
+                    ) THEN
+                        ALTER TABLE finished_quest_geometries ADD COLUMN geometry_type_new TEXT[];
+                        UPDATE finished_quest_geometries SET geometry_type_new = CASE WHEN geometry_type IS NULL THEN NULL ELSE ARRAY[geometry_type::text] END;
+                        ALTER TABLE finished_quest_geometries DROP COLUMN geometry_type;
+                        ALTER TABLE finished_quest_geometries RENAME COLUMN geometry_type_new TO geometry_type;
+                    END IF;
+                END
+                $$;
                 """
             )
             cur.execute(

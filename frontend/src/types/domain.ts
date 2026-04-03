@@ -65,12 +65,14 @@ export interface Quest {
   external_status?: string;
   isTransferred?: boolean;
   transferred_quest_id?: string;
-  geometry_type?: GeometryType | null;
+  geometry_type?: GeometryType | GeometryType[] | null;
   geometry_status?: GeometryStatus | string;
   geometry_source_path?: string | null;
   geometry_source_name?: string | null;
   geometry_feature_count?: number;
   geometry_updated_at?: string | null;
+  has_point?: boolean;
+  has_polygon?: boolean;
 }
 
 export interface LoginResponse {
@@ -146,13 +148,17 @@ export interface QuestGeometryRecord {
   ft?: FtOption | string;
   quest_type?: FtOption | string;
   matziah?: MatziahOption | string;
-  geometry_type?: GeometryType | null;
+  geometry_type?: GeometryType | GeometryType[] | null;
   geometry_status: GeometryStatus | string;
   source_path?: string | null;
   source_name?: string | null;
   upload_kind?: string | null;
   feature_count: number;
   feature_collection?: GeoFeatureCollection | null;
+  point_geojson?: GeoFeatureCollection | null;
+  polygon_geojson?: GeoFeatureCollection | null;
+  point_feature_count?: number;
+  polygon_feature_count?: number;
   utm_zone?: number | null;
   utm_band?: string | null;
   utm_easting?: number | null;

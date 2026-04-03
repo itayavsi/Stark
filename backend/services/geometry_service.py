@@ -179,26 +179,56 @@ def get_geometry_catalog(group: str | None = None, status: str | None = None) ->
     )
 
     for record in records:
+        geometry_type = record.get("geometry_type") or []
+        if isinstance(geometry_type, str):
+            geometry_type = [geometry_type]
+        
+        point_geojson = record.get("point_geojson")
+        polygon_geojson = record.get("polygon_geojson")
         feature_collection = record.get("feature_collection") or _empty_feature_collection()
-        features = feature_collection.get("features") or []
         properties = _quest_feature_properties(record)
 
-        for index, feature in enumerate(features):
-            if not feature.get("geometry"):
-                continue
-            next_feature = {
-                "type": "Feature",
-                "properties": {
-                    **properties,
-                    **(feature.get("properties") or {}),
-                    "feature_index": index,
-                },
-                "geometry": feature["geometry"],
-            }
-            if record.get("geometry_type") == "polygon":
-                polygon_features.append(next_feature)
+        if point_geojson or ("point" in geometry_type and feature_collection.get("features")):
+            if point_geojson:
+                features = point_geojson.get("features") or []
             else:
-                point_features.append(next_feature)
+                features = feature_collection.get("features") or []
+            
+            for index, feature in enumerate(features):
+                if not feature.get("geometry"):
+                    continue
+                if feature["geometry"].get("type") in ("Point", "MultiPoint"):
+                    next_feature = {
+                        "type": "Feature",
+                        "properties": {
+                            **properties,
+                            **(feature.get("properties") or {}),
+                            "feature_index": index,
+                        },
+                        "geometry": feature["geometry"],
+                    }
+                    point_features.append(next_feature)
+        
+        if polygon_geojson or ("polygon" in geometry_type and feature_collection.get("features")):
+            if polygon_geojson:
+                features = polygon_geojson.get("features") or []
+            else:
+                features = feature_collection.get("features") or []
+            
+            for index, feature in enumerate(features):
+                if not feature.get("geometry"):
+                    continue
+                if feature["geometry"].get("type") in ("Polygon", "MultiPolygon"):
+                    next_feature = {
+                        "type": "Feature",
+                        "properties": {
+                            **properties,
+                            **(feature.get("properties") or {}),
+                            "feature_index": index,
+                        },
+                        "geometry": feature["geometry"],
+                    }
+                    polygon_features.append(next_feature)
 
     return {
         "quest_types": quest_types,
@@ -347,26 +377,56 @@ def get_finished_geometry_catalog(group: str | None = None) -> Dict[str, Any]:
     )
 
     for record in records:
+        geometry_type = record.get("geometry_type") or []
+        if isinstance(geometry_type, str):
+            geometry_type = [geometry_type]
+        
+        point_geojson = record.get("point_geojson")
+        polygon_geojson = record.get("polygon_geojson")
         feature_collection = record.get("feature_collection") or _empty_feature_collection()
-        features = feature_collection.get("features") or []
         properties = _quest_feature_properties(record)
 
-        for index, feature in enumerate(features):
-            if not feature.get("geometry"):
-                continue
-            next_feature = {
-                "type": "Feature",
-                "properties": {
-                    **properties,
-                    **(feature.get("properties") or {}),
-                    "feature_index": index,
-                },
-                "geometry": feature["geometry"],
-            }
-            if record.get("geometry_type") == "polygon":
-                polygon_features.append(next_feature)
+        if point_geojson or ("point" in geometry_type and feature_collection.get("features")):
+            if point_geojson:
+                features = point_geojson.get("features") or []
             else:
-                point_features.append(next_feature)
+                features = feature_collection.get("features") or []
+            
+            for index, feature in enumerate(features):
+                if not feature.get("geometry"):
+                    continue
+                if feature["geometry"].get("type") in ("Point", "MultiPoint"):
+                    next_feature = {
+                        "type": "Feature",
+                        "properties": {
+                            **properties,
+                            **(feature.get("properties") or {}),
+                            "feature_index": index,
+                        },
+                        "geometry": feature["geometry"],
+                    }
+                    point_features.append(next_feature)
+        
+        if polygon_geojson or ("polygon" in geometry_type and feature_collection.get("features")):
+            if polygon_geojson:
+                features = polygon_geojson.get("features") or []
+            else:
+                features = feature_collection.get("features") or []
+            
+            for index, feature in enumerate(features):
+                if not feature.get("geometry"):
+                    continue
+                if feature["geometry"].get("type") in ("Polygon", "MultiPolygon"):
+                    next_feature = {
+                        "type": "Feature",
+                        "properties": {
+                            **properties,
+                            **(feature.get("properties") or {}),
+                            "feature_index": index,
+                        },
+                        "geometry": feature["geometry"],
+                    }
+                    polygon_features.append(next_feature)
 
     return {
         "quest_types": quest_types,
