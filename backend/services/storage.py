@@ -24,6 +24,7 @@ def _normalize_quest(row: Dict) -> Dict:
         "id": str(row["id"]),
         "title": row["title"],
         "description": row["description"],
+        "notes": row.get("notes", ""),
         "status": row["status"],
         "priority": row["priority"],
         "date": row["date"],
@@ -60,6 +61,7 @@ def _quest_columns(table_alias: str = "q") -> str:
         {prefix}id,
         {prefix}title,
         {prefix}description,
+        {prefix}notes,
         {prefix}status,
         {prefix}"תעדוף" AS priority,
         {prefix}date,
@@ -332,6 +334,7 @@ def update_quest(quest_id: str, updates: Dict) -> Optional[Dict]:
     allowed_fields = {
         "title": "title",
         "description": "description",
+        "notes": "notes",
         "status": "status",
         "priority": '"תעדוף"',
         "date": "date",
@@ -420,6 +423,7 @@ def move_quest(quest_id: str, destination_table: str, updates: Optional[Dict] = 
     allowed_fields = {
         "title": "title",
         "description": "description",
+        "notes": "notes",
         "status": "status",
         "priority": "priority",
         "date": "date",
@@ -444,6 +448,7 @@ def move_quest(quest_id: str, destination_table: str, updates: Optional[Dict] = 
                     id,
                     title,
                     description,
+                    notes,
                     status,
                     "תעדוף" AS priority,
                     date,
@@ -467,6 +472,7 @@ def move_quest(quest_id: str, destination_table: str, updates: Optional[Dict] = 
                 "id": str(row["id"]),
                 "title": row["title"],
                 "description": row["description"],
+                "notes": row.get("notes", ""),
                 "status": row["status"],
                 "priority": row["priority"],
                 "date": row["date"],
@@ -487,12 +493,12 @@ def move_quest(quest_id: str, destination_table: str, updates: Optional[Dict] = 
             cur.execute(
                 f"""
                 INSERT INTO {destination_table} (
-                    id, title, description, status, "תעדוף", date, assigned_user,
+                    id, title, description, notes, status, "תעדוף", date, assigned_user,
                     shapefile_path, group_name, year, ft, "מצייח",
                     sync_external_id, sync_source, sync_name
                 )
                 VALUES (
-                    %(id)s, %(title)s, %(description)s, %(status)s, %(priority)s, %(date)s, %(assigned_user)s,
+                    %(id)s, %(title)s, %(description)s, %(notes)s, %(status)s, %(priority)s, %(date)s, %(assigned_user)s,
                     %(shapefile_path)s, %(group)s, %(year)s, %(ft)s, %(matziah)s,
                     %(sync_external_id)s, %(sync_source)s, %(sync_name)s
                 )
@@ -500,6 +506,7 @@ def move_quest(quest_id: str, destination_table: str, updates: Optional[Dict] = 
                 DO UPDATE SET
                     title = EXCLUDED.title,
                     description = EXCLUDED.description,
+                    notes = EXCLUDED.notes,
                     status = EXCLUDED.status,
                     "תעדוף" = EXCLUDED."תעדוף",
                     date = EXCLUDED.date,

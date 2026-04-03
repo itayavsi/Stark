@@ -13,7 +13,7 @@ interface AttributeTableProps {
   onRefreshFinished?: () => Promise<unknown>;
 }
 
-type EditableField = 'title' | 'status' | 'priority' | 'assigned_user' | 'group' | 'year' | 'date';
+type EditableField = 'title' | 'status' | 'priority' | 'assigned_user' | 'group' | 'year' | 'date' | 'notes';
 
 interface SqlFilter {
   field: keyof Quest;
@@ -32,6 +32,7 @@ const COLUMNS: Array<{ key: keyof Quest | 'geometry_summary' | 'accuracy_xy' | '
   { key: 'year', label: 'שנה', editable: true },
   { key: 'assigned_user', label: 'משויך', editable: true },
   { key: 'date', label: 'תאריך', editable: true },
+  { key: 'notes', label: 'הערות', editable: true },
   { key: 'geometry_type', label: 'סוג גיאומטריה' },
   { key: 'geometry_status', label: 'סטטוס גיאומטריה' },
   { key: 'geometry_summary', label: 'מקור / מידע' },
@@ -46,6 +47,7 @@ const FINISHED_COLUMNS: Array<{ key: keyof Quest | 'geometry_summary' | 'accurac
   { key: 'year', label: 'שנה', editable: true },
   { key: 'assigned_user', label: 'משויך', editable: true },
   { key: 'date', label: 'תאריך', editable: true },
+  { key: 'notes', label: 'הערות', editable: true },
   { key: 'geometry_type', label: 'סוג גיאומטריה' },
   { key: 'accuracy_xy', label: 'דיוק XY (ס"מ)' },
   { key: 'accuracy_z', label: 'דיוק Z (ס"מ)' },
@@ -61,6 +63,7 @@ const ALL_COLUMNS: Array<{ key: keyof Quest | 'geometry_summary' | 'accuracy_xy'
   { key: 'year', label: 'שנה', editable: true },
   { key: 'assigned_user', label: 'משויך', editable: true },
   { key: 'date', label: 'תאריך', editable: true },
+  { key: 'notes', label: 'הערות', editable: true },
   { key: 'geometry_type', label: 'סוג גיאומטריה' },
   { key: 'geometry_status', label: 'סטטוס גיאומטריה' },
   { key: 'accuracy_xy', label: 'דיוק XY (ס"מ)' },
@@ -70,6 +73,24 @@ const ALL_COLUMNS: Array<{ key: keyof Quest | 'geometry_summary' | 'accuracy_xy'
 
 const STATUS_OPTIONS: QuestStatus[] = ['Open', 'Taken', 'In Progress', 'Done', 'Approved', 'Stopped', 'Cancelled', 'ממתין'];
 const PRIORITY_OPTIONS: QuestPriority[] = ['גבוה', 'רגיל', 'נמוך'];
+
+const DEFAULT_COL_WIDTHS: Record<string, number> = {
+  actions: 140,
+  title: 200,
+  quest_type: 100,
+  status: 100,
+  priority: 80,
+  group: 100,
+  year: 70,
+  assigned_user: 120,
+  date: 100,
+  notes: 200,
+  geometry_type: 100,
+  geometry_status: 100,
+  geometry_summary: 150,
+  accuracy_xy: 100,
+  accuracy_z: 100,
+};
 
 export default function AttributeTable({
   quests,
@@ -89,40 +110,69 @@ export default function AttributeTable({
   const [zoomLevel, setZoomLevel] = useState(100);
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
   const [editedQuest, setEditedQuest] = useState<Quest | null>(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [showSqlPanel, setShowSqlPanel] = useState(false);
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
+  const [resizing, setResizing] = useState<{ key: string; startX: number; startWidth: number } | null>(null);
+  const resizingRef = useRef<{ key: string; startX: number; startWidth: number } | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('all');
   const [sqlFilters, setSqlFilters] = useState<SqlFilter[]>([]);
   const [activeSqlFilter, setActiveSqlFilter] = useState<SqlFilter | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showSqlPanel, setShowSqlPanel] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [uploadQuestId, setUploadQuestId] = useState<string | null>(null);
   const [uploadType, setUploadType] = useState<'points' | 'shp'>('points');
-  const [viewMode, setViewMode] = useState<ViewMode>('all');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const getCurrentColumns = (): typeof COLUMNS => {
     switch (viewMode) {
-      case 'active':
-        return COLUMNS;
       case 'finished':
         return FINISHED_COLUMNS;
-      case 'all':
+      case 'active':
+        return COLUMNS;
       default:
         return ALL_COLUMNS;
     }
   };
 
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      const r = resizingRef.current;
+      if (!r) return;
+      const delta = -(e.clientX - r.startX);
+      const newWidth = Math.max(50, r.startWidth + delta);
+      setColumnWidths((prev) => ({ ...prev, [r.key]: newWidth }));
+    };
+
+    const handleMouseUp = () => {
+      setResizing(null);
+      resizingRef.current = null;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [resizing]);
+
+  const startResize = (e: React.MouseEvent, key: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const width = columnWidths[key] || DEFAULT_COL_WIDTHS[key] || 100;
+    const state = { key, startX: e.clientX, startWidth: width };
+    setResizing(state);
+    resizingRef.current = state;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  };
+
+  const getColumnWidth = (key: string) => columnWidths[key] || DEFAULT_COL_WIDTHS[key] || undefined;
+
   const currentColumns = getCurrentColumns();
   const currentQuests = viewMode === 'finished' ? finishedQuests : viewMode === 'active' ? quests : [...quests, ...finishedQuests];
-
-  useEffect(() => {
-    if (isMaximized) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, [isMaximized]);
 
   const rows = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
@@ -138,7 +188,7 @@ export default function AttributeTable({
       const matchesSql = sqlFilters.every((filter) => {
         const value = quest[filter.field];
         const filterValue = filter.value.toLowerCase();
-        
+
         switch (filter.operator) {
           case '=':
             return String(value ?? '').toLowerCase() === filterValue;
@@ -444,12 +494,24 @@ export default function AttributeTable({
         <table style={{ ...S.table, ...tableStyle }}>
           <thead>
             <tr>
-              <th style={{ ...S.th, width: 140 }}>פעולות</th>
+              <th style={{ ...S.th, width: getColumnWidth('actions'), minWidth: 80 }}>
+                <div style={S.thContent}>
+                  <span style={S.thLabel}>פעולות</span>
+                  <div
+                    style={{
+                      ...S.resizeHandle,
+                      ...(resizing?.key === 'actions' ? S.resizeHandleActive : {}),
+                    }}
+                    onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); startResize(e, 'actions'); }}
+                  />
+                </div>
+              </th>
               {currentColumns.map((column) => (
                 <th
                   key={column.key}
-                  style={S.th}
+                  style={{ ...S.th, width: getColumnWidth(column.key), minWidth: 80 }}
                   onClick={() => {
+                    if (resizing) return;
                     if (sortCol === column.key) {
                       setSortDir((current) => current === 'asc' ? 'desc' : 'asc');
                       return;
@@ -458,7 +520,16 @@ export default function AttributeTable({
                     setSortDir('asc');
                   }}
                 >
-                  {column.label} {sortCol === column.key ? (sortDir === 'asc' ? '↑' : '↓') : ''}
+                  <div style={S.thContent}>
+                    <span style={S.thLabel}>{column.label} {sortCol === column.key ? (sortDir === 'asc' ? '↑' : '↓') : ''}</span>
+                    <div
+                      style={{
+                        ...S.resizeHandle,
+                        ...(resizing?.key === column.key ? S.resizeHandleActive : {}),
+                      }}
+                      onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); startResize(e, column.key); }}
+                    />
+                  </div>
                 </th>
               ))}
             </tr>
@@ -480,7 +551,7 @@ export default function AttributeTable({
                   }
                 }}
               >
-                <td style={S.tdActions}>
+                <td style={{ ...S.tdActions, width: getColumnWidth('actions') }}>
                   {editingRowId === quest.id ? (
                     <div style={S.actionButtons}>
                       <button
@@ -533,7 +604,11 @@ export default function AttributeTable({
                   )}
                 </td>
                 {currentColumns.map((column) => (
-                  <td key={column.key} style={S.td} title={String(getColumnValue(quest, column.key as keyof Quest | 'geometry_summary' | 'accuracy_xy' | 'accuracy_z'))}>
+                  <td
+                    key={column.key}
+                    style={{ ...S.td, width: getColumnWidth(column.key) }}
+                    title={String(getColumnValue(quest, column.key as keyof Quest | 'geometry_summary' | 'accuracy_xy' | 'accuracy_z'))}
+                  >
                     {editingRowId === quest.id && column.editable ? (
                       <EditableCell
                         field={column.key as EditableField}
@@ -601,6 +676,18 @@ function EditableCell({
         value={typeof value === 'number' ? value : ''}
         onChange={(e) => onChange(e.target.value)}
         onClick={(e) => e.stopPropagation()}
+      />
+    );
+  }
+
+  if (field === 'notes') {
+    return (
+      <textarea
+        style={S.editTextarea}
+        value={typeof value === 'string' ? value : ''}
+        onChange={(e) => onChange(e.target.value)}
+        onClick={(e) => e.stopPropagation()}
+        rows={3}
       />
     );
   }
@@ -847,6 +934,7 @@ const S: Record<string, CSSProperties> = {
     width: '100%',
     borderCollapse: 'collapse',
     minWidth: 1200,
+    tableLayout: 'fixed',
   },
   th: {
     position: 'sticky',
@@ -855,10 +943,36 @@ const S: Record<string, CSSProperties> = {
     fontSize: 11,
     color: 'var(--text3)',
     textAlign: 'right',
-    padding: '6px 8px',
+    padding: '6px 0 6px 8px',
     borderBottom: '1px solid var(--border)',
     cursor: 'pointer',
     whiteSpace: 'nowrap',
+    userSelect: 'none',
+  },
+  thContent: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingRight: 8,
+  },
+  thLabel: {
+    flex: 1,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+  resizeHandle: {
+    width: 8,
+    height: 20,
+    cursor: 'col-resize',
+    background: 'var(--accent)',
+    borderRadius: 2,
+    flexShrink: 0,
+    marginRight: 4,
+    opacity: 0.3,
+    transition: 'opacity 0.15s',
+  },
+  resizeHandleActive: {
+    opacity: 1,
   },
   tr: {
     cursor: 'pointer',
@@ -900,6 +1014,19 @@ const S: Record<string, CSSProperties> = {
     background: 'var(--surface)',
     color: 'var(--text)',
     fontFamily: 'var(--font)',
+  },
+  editTextarea: {
+    width: '100%',
+    fontSize: 11,
+    padding: '4px 6px',
+    borderRadius: 3,
+    border: '1px solid var(--accent)',
+    background: 'var(--surface)',
+    color: 'var(--text)',
+    fontFamily: 'var(--font)',
+    resize: 'vertical',
+    minHeight: 40,
+    boxSizing: 'border-box',
   },
   editSelect: {
     width: '100%',

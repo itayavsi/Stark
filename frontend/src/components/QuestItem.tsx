@@ -5,6 +5,7 @@ import {
   setQuestStatus,
   takeQuest,
   transferExternalQuestToOpen,
+  updateQuest,
 } from '../services/api';
 import { ftColor } from '../services/ftConfig';
 import type { GeometryCatalog, Quest, QuestGeometryRecord, User } from '../types/domain';
@@ -43,6 +44,8 @@ export default function QuestItem({
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ text: string; type: MessageType }>({ text: '', type: 'info' });
   const [showAccuracyModal, setShowAccuracyModal] = useState(false);
+  const [editingNotes, setEditingNotes] = useState(false);
+  const [notesValue, setNotesValue] = useState('');
   const clearMessageTimeout = useRef<number | null>(null);
 
   const role = user?.role || 'Viewer';
@@ -163,6 +166,29 @@ export default function QuestItem({
     setBusy(false);
   };
 
+  const startEditingNotes = () => {
+    setNotesValue(quest.notes || '');
+    setEditingNotes(true);
+  };
+
+  const cancelEditingNotes = () => {
+    setEditingNotes(false);
+    setNotesValue('');
+  };
+
+  const saveNotes = async () => {
+    setBusy(true);
+    try {
+      await updateQuest(quest.id, { notes: notesValue });
+      showMsg('✓ ההערות נשמרו בהצלחה', 'success');
+      setEditingNotes(false);
+      await onRefresh();
+    } catch {
+      showMsg('✗ שגיאה בשמירת ההערות', 'error');
+    }
+    setBusy(false);
+  };
+
   const msgColor: Record<MessageType, string> = { success:'var(--green)', error:'var(--red)', warning:'var(--orange)', info:'var(--accent)' };
 
   return (
@@ -197,6 +223,60 @@ export default function QuestItem({
         <div style={S.expanded} onClick={e => e.stopPropagation()}>
 
           {quest.description && <p style={S.desc}>{quest.description}</p>}
+          
+          {/* Notes Section */}
+          <div style={S.notesSection}>
+            <div style={S.notesHeader}>
+              <span style={S.notesLabel}>הערות:</span>
+              {!isViewer && !editingNotes && (
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={(e) => { e.stopPropagation(); startEditingNotes(); }}
+                  style={{ fontSize: 10, padding: '2px 8px' }}
+                  type="button"
+                >
+                  {quest.notes ? '✎ ערוך' : '+ הוסף הערות'}
+                </button>
+              )}
+            </div>
+            {editingNotes ? (
+              <div style={S.notesEditor}>
+                <textarea
+                  style={S.notesTextarea}
+                  value={notesValue}
+                  onChange={(e) => setNotesValue(e.target.value)}
+                  placeholder="הזן הערות..."
+                  rows={3}
+                  autoFocus
+                />
+                <div style={S.notesActions}>
+                  <button
+                    className="btn btn-primary btn-sm"
+                    onClick={(e) => { e.stopPropagation(); saveNotes(); }}
+                    disabled={busy}
+                    type="button"
+                  >
+                    שמור
+                  </button>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={(e) => { e.stopPropagation(); cancelEditingNotes(); }}
+                    disabled={busy}
+                    type="button"
+                  >
+                    ביטול
+                  </button>
+                </div>
+              </div>
+            ) : quest.notes ? (
+              <p style={S.notesText}>{quest.notes}</p>
+            ) : (
+              <p style={{ ...S.notesText, color: 'var(--text3)', fontStyle: 'italic' }}>
+                אין הערות
+              </p>
+            )}
+          </div>
+          
           {quest.sync_external_id && (
             <div style={S.syncHint}>
               {quest.matziah === 'N'
@@ -338,6 +418,25 @@ const S: Record<string, CSSProperties> = {
   metaItem: { fontSize:11, color:'var(--text2)' },
   expanded: { marginTop:10, borderTop:'1px solid var(--border)', paddingTop:10 },
   desc:     { fontSize:12, color:'var(--text2)', marginBottom:10, lineHeight:1.6 },
+  notesSection: { marginBottom: 10 },
+  notesHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  notesLabel: { fontSize: 11, color: 'var(--text3)', fontWeight: 600 },
+  notesText: { fontSize: 12, color: 'var(--text2)', margin: 0, lineHeight: 1.6, padding: '6px 8px', background: 'var(--surface)', borderRadius: 6, border: '1px solid var(--border)' },
+  notesEditor: { display: 'flex', flexDirection: 'column', gap: 6 },
+  notesTextarea: { 
+    width: '100%', 
+    fontSize: 12, 
+    padding: '8px', 
+    borderRadius: 6, 
+    border: '1px solid var(--accent)', 
+    background: 'var(--surface)', 
+    color: 'var(--text)', 
+    fontFamily: 'var(--font)', 
+    resize: 'vertical',
+    minHeight: 60,
+    boxSizing: 'border-box',
+  },
+  notesActions: { display: 'flex', gap: 6 },
   msgBar:   {
     fontSize:12, padding:'6px 10px', borderRadius:6,
     background:'var(--surface)', marginBottom:8, border:'1px solid var(--border)',

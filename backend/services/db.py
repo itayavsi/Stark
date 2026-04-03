@@ -92,6 +92,7 @@ def init_db() -> None:
                     id UUID PRIMARY KEY,
                     title TEXT NOT NULL,
                     description TEXT NOT NULL DEFAULT '',
+                    notes TEXT NOT NULL DEFAULT '',
                     status TEXT NOT NULL,
                     "תעדוף" TEXT NOT NULL DEFAULT 'רגיל',
                     date TEXT NOT NULL,
@@ -109,6 +110,7 @@ def init_db() -> None:
                     id UUID PRIMARY KEY,
                     title TEXT NOT NULL,
                     description TEXT NOT NULL DEFAULT '',
+                    notes TEXT NOT NULL DEFAULT '',
                     status TEXT NOT NULL,
                     "תעדוף" TEXT NOT NULL DEFAULT 'רגיל',
                     date TEXT NOT NULL,
@@ -178,6 +180,18 @@ def init_db() -> None:
                 f"""
                 ALTER TABLE {FINISHED_QUESTS_TABLE}
                 ADD COLUMN IF NOT EXISTS sync_name TEXT NULL;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {OPEN_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS notes TEXT NOT NULL DEFAULT '';
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {FINISHED_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS notes TEXT NOT NULL DEFAULT '';
                 """
             )
             cur.execute(

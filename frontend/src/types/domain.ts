@@ -45,6 +45,7 @@ export interface Quest {
   id: string;
   title: string;
   description?: string;
+  notes?: string;
   ft?: FtOption | string;
   quest_type?: FtOption | string;
   status: QuestStatus | string;
