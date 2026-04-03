@@ -11,6 +11,7 @@ interface AttributeTableProps {
   onUpdateQuest?: (quest: Quest) => Promise<void>;
   onAddGeometry?: (questId: string, file: File, type: 'points' | 'shp') => Promise<void>;
   onRefreshFinished?: () => Promise<unknown>;
+  onViewModeChange?: (mode: 'all' | 'active' | 'finished') => void;
 }
 
 type EditableField = 'title' | 'status' | 'priority' | 'assigned_user' | 'group' | 'year' | 'date' | 'notes';
@@ -101,6 +102,7 @@ export default function AttributeTable({
   onUpdateQuest,
   onAddGeometry,
   onRefreshFinished,
+  onViewModeChange,
 }: AttributeTableProps) {
   const [sortCol, setSortCol] = useState<keyof Quest>('title');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
@@ -240,6 +242,7 @@ export default function AttributeTable({
 
   const handleViewModeChange = (mode: ViewMode) => {
     setViewMode(mode);
+    onViewModeChange?.(mode);
     if (mode === 'finished' && onRefreshFinished) {
       void onRefreshFinished();
     }

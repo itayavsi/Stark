@@ -50,6 +50,7 @@ export default function HomePage() {
     showPolygons: false,
     questTypes: {},
   });
+  const [tableViewMode, setTableViewMode] = useState<'all' | 'active' | 'finished'>('all');
 
   const localQuests = useMemo(
     () => quests.filter((quest) => !quest.id.startsWith('external:') && quest.status !== 'Done' && quest.status !== 'Approved'),
@@ -60,6 +61,25 @@ export default function HomePage() {
     [quests],
   );
   const tableOpen = layerFilters.showPoints || layerFilters.showPolygons;
+
+  const filteredGeometryCatalog = useMemo(() => {
+    const activeIds = new Set(localQuests.map((q) => q.id));
+    const finishedIds = new Set(finishedQuests.map((q) => q.id));
+
+    const filterFeatures = (features: GeometryCatalog['points']['features']) => {
+      if (tableViewMode === 'all') return features;
+      if (tableViewMode === 'active') {
+        return features.filter((f) => activeIds.has(String(f.properties?.quest_id)));
+      }
+      return features.filter((f) => finishedIds.has(String(f.properties?.quest_id)));
+    };
+
+    return {
+      ...geometryCatalog,
+      points: { ...geometryCatalog.points, features: filterFeatures(geometryCatalog.points.features) },
+      polygons: { ...geometryCatalog.polygons, features: filterFeatures(geometryCatalog.polygons.features) },
+    };
+  }, [geometryCatalog, localQuests, finishedQuests, tableViewMode]);
 
   const loadGeometryCatalog = useCallback(async () => {
     try {
@@ -252,7 +272,7 @@ export default function HomePage() {
             focusCoords={focusCoords}
             focusBounds={focusBounds}
             jumpMarker={jumpMarker}
-            geometryCatalog={geometryCatalog}
+            geometryCatalog={filteredGeometryCatalog}
             filters={layerFilters}
             onToggleGeometryLayer={handleToggleGeometryLayer}
             onToggleQuestType={handleToggleQuestType}
@@ -279,6 +299,7 @@ export default function HomePage() {
                   onUpdateQuest={handleUpdateQuest}
                   onAddGeometry={handleAddGeometry}
                   onRefreshFinished={loadFinishedGeometryCatalog}
+                  onViewModeChange={setTableViewMode}
                 />
               </div>
             </div>
