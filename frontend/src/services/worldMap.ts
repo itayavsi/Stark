@@ -218,41 +218,52 @@ const WORLD_GEOJSON: GeoFeatureCollection = {
         [34.25,29.5],[34.9,29.5],[35.7,31],[35.9,32.7],[35.1,33.3],
         [34.4,33.1],[34.2,31.8],[34.25,29.5]
       ]]}},
-    { id:38, type:"Feature", properties:{name:"Syria", continent:"Asia"},
+    { id: 38, type:"Feature", properties:{name:"Syria", continent:"Asia"},
       geometry:{type:"Polygon", coordinates:[[
         [36,33],[38,34],[40,36],[42,38],[40,38],[38,38],[36,38],[36,36],[36,33]
       ]]}},
-
-    // ── Asia ──────────────────────────────────────────────
-    { id:39, type:"Feature", properties:{name:"China", continent:"Asia"},
+    { id: 39, type:"Feature", properties:{name:"Lebanon", continent:"Asia"},
+      geometry:{type:"Polygon", coordinates:[[
+        [35.6,33.1],[35.7,33.1],[35.9,33.2],[35.95,33.5],[35.9,34.1],[35.7,34.3],[35.5,34.2],[35.5,33.7],[35.6,33.1]
+      ]]}},
+    { id: 40, type:"Feature", properties:{name:"Jordan", continent:"Asia"},
+      geometry:{type:"Polygon", coordinates:[[
+        [35,29.5],[35.5,29.5],[36,30],[36.5,31],[36.5,32],[36,32.5],[35.5,32],[35,31.5],[35,29.5]
+      ]]}},
+    { id: 41, type:"Feature", properties:{name:"Yemen", continent:"Asia"},
+      geometry:{type:"Polygon", coordinates:[[
+        [42.5,12.5],[43.5,12],[44.5,12.5],[45.5,13],[46.5,14],[48,15],[49,17],[50.5,19],
+        [51,21],[50.5,22],[48,23],[46,22],[44,21],[42.5,20],[41,18],[42,15],[42.5,12.5]
+      ]]}},
+    { id: 41, type:"Feature", properties:{name:"China", continent:"Asia"},
       geometry:{type:"Polygon", coordinates:[[
         [78,36],[80,38],[82,40],[86,42],[90,44],[94,42],[98,40],[100,40],
         [104,38],[108,38],[110,40],[114,40],[118,42],[122,46],[122,48],
         [120,52],[116,53],[112,50],[108,48],[104,48],[100,46],[96,44],
         [92,42],[88,40],[84,38],[80,36],[78,34],[78,36]
       ]]}},
-    { id:40, type:"Feature", properties:{name:"China South", continent:"Asia"},
+    { id: 42, type:"Feature", properties:{name:"China South", continent:"Asia"},
       geometry:{type:"Polygon", coordinates:[[
         [100,22],[104,22],[108,22],[110,20],[114,22],[120,24],[122,28],
         [120,30],[116,32],[112,30],[108,28],[104,26],[100,24],[100,22]
       ]]}},
-    { id:41, type:"Feature", properties:{name:"India", continent:"Asia"},
+    { id: 43, type:"Feature", properties:{name:"India", continent:"Asia"},
       geometry:{type:"Polygon", coordinates:[[
         [68,22],[70,24],[72,24],[74,26],[76,28],[78,30],[80,32],[82,30],
         [84,28],[86,26],[88,24],[88,22],[86,18],[82,14],[80,10],[78,8],
         [76,8],[74,16],[72,20],[68,22]
       ]]}},
-    { id:42, type:"Feature", properties:{name:"Pakistan", continent:"Asia"},
+    { id: 44, type:"Feature", properties:{name:"Pakistan", continent:"Asia"},
       geometry:{type:"Polygon", coordinates:[[
         [60,25],[62,28],[64,30],[66,30],[68,30],[72,34],[74,36],[72,38],
         [68,36],[64,34],[60,34],[60,32],[60,28],[60,25]
       ]]}},
-    { id:43, type:"Feature", properties:{name:"Afghanistan", continent:"Asia"},
+    { id: 45, type:"Feature", properties:{name:"Afghanistan", continent:"Asia"},
       geometry:{type:"Polygon", coordinates:[[
         [60,34],[62,36],[64,38],[66,38],[68,38],[72,38],[74,36],[72,34],
         [68,30],[66,30],[64,30],[62,28],[60,28],[60,34]
       ]]}},
-    { id:44, type:"Feature", properties:{name:"Kazakhstan", continent:"Asia"},
+    { id: 46, type:"Feature", properties:{name:"Kazakhstan", continent:"Asia"},
       geometry:{type:"Polygon", coordinates:[[
         [50,44],[55,44],[60,44],[65,44],[70,42],[75,42],[80,42],[85,48],
         [82,52],[78,55],[72,55],[66,55],[60,55],[55,52],[50,50],[50,44]

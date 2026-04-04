@@ -74,17 +74,6 @@ function buildStyle(worldData: GeoFeatureCollection, mode: 'dark' | 'light') {
   };
 }
 
-const LABELS = [
-  { he: 'ישראל', en: 'Israel', lon: 34.85, lat: 31.4, minZoom: 2 },
-  { he: 'רוסיה', en: 'Russia', lon: 97, lat: 62, minZoom: 1 },
-  { he: 'קנדה', en: 'Canada', lon: -96, lat: 60, minZoom: 1 },
-  { he: 'ארה"ב', en: 'USA', lon: -98, lat: 38, minZoom: 1 },
-  { he: 'ברזיל', en: 'Brazil', lon: -52, lat: -10, minZoom: 1 },
-  { he: 'אוסטרליה', en: 'Australia', lon: 134, lat: -25, minZoom: 1 },
-  { he: 'סין', en: 'China', lon: 104, lat: 35, minZoom: 1 },
-  { he: 'הודו', en: 'India', lon: 78, lat: 22, minZoom: 1 },
-];
-
 interface MapViewProps {
   focusCoords: LngLatPoint | null;
   focusBounds: MapBounds | null;
@@ -210,20 +199,45 @@ export default function MapView({
   }, [onClearIdentify]);
 
   const renderLabels = useCallback((map: maplibregl.Map) => {
+    const zoom = map.getZoom();
+    if (zoom < 2) return;
+
     const palette = getMapPalette(mode);
     markersRef.current.forEach((marker) => marker.remove());
     markersRef.current = [];
 
-    LABELS.forEach((label) => {
-      if (map.getZoom() < label.minZoom) {
+    FALLBACK_WORLD.features.forEach((feature) => {
+      const name = String(feature.properties?.name || '');
+      if (!name) return;
+
+      const geometry = feature.geometry;
+      if (!geometry?.coordinates) return;
+
+      let ring: number[][];
+      if (geometry.type === 'MultiPolygon') {
+        const polys = geometry.coordinates as number[][][][];
+        if (!polys?.[0]?.[0]) return;
+        ring = polys[0][0];
+      } else if (geometry.type === 'Polygon') {
+        const rings = geometry.coordinates as number[][][];
+        if (!rings?.[0]) return;
+        ring = rings[0];
+      } else {
         return;
       }
 
+      if (!ring.length) return;
+
+      const lon = ring.reduce((sum: number, c: number[]) => sum + c[0], 0) / ring.length;
+      const lat = ring.reduce((sum: number, c: number[]) => sum + c[1], 0) / ring.length;
+
+      if (!Number.isFinite(lon) || !Number.isFinite(lat)) return;
+
       const element = document.createElement('div');
-      element.textContent = map.getZoom() >= 5 ? label.he : label.en;
+      element.textContent = name;
       element.style.cssText = [
         `color:${palette.labelColor}`,
-        `font-size:${map.getZoom() >= 6 ? 12 : 10}px`,
+        `font-size:${zoom >= 6 ? 12 : 10}px`,
         'font-weight:600',
         "font-family:'Segoe UI',Arial,sans-serif",
         `text-shadow:0 0 4px ${palette.labelShadow},0 0 8px ${palette.labelShadow}`,
@@ -233,7 +247,7 @@ export default function MapView({
 
       markersRef.current.push(
         new maplibregl.Marker({ element, anchor: 'center' })
-          .setLngLat([label.lon, label.lat])
+          .setLngLat([lon, lat])
           .addTo(map),
       );
     });
