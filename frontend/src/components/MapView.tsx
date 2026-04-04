@@ -5,8 +5,8 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import { useTheme } from '../context/ThemeContext';
 import FALLBACK_WORLD from '../services/worldMap';
 import { ftColor } from '../services/ftConfig';
-import type { GeoFeatureCollection, GeometryCatalog, LayerFilters, LngLatPoint, MapBounds } from '../types/domain';
-import { formatAllCoordinateTypes, formatD, formatDD, formatDMS, formatUTM } from '../utils/geo';
+import type { GeoFeature, GeoFeatureCollection, GeometryCatalog, IdentifyResults, LayerFilters, LngLatPoint, MapBounds } from '../types/domain';
+import { formatAllCoordinateTypes, formatD, formatDD, formatDMS, formatUTM, identifyFeaturesAtPoint } from '../utils/geo';
 
 const POINT_SOURCE_ID = 'quest-points';
 const POLYGON_SOURCE_ID = 'quest-polygons';
@@ -91,6 +91,10 @@ interface MapViewProps {
   jumpMarker: LngLatPoint | null;
   geometryCatalog: GeometryCatalog | null;
   filters: LayerFilters;
+  identifyResults: IdentifyResults | null;
+  selectedFeatureId: string | number | null;
+  onIdentify: (results: IdentifyResults) => void;
+  onClearIdentify: () => void;
   onToggleGeometryLayer: (geometryType: 'point' | 'polygon') => void;
   onToggleQuestType: (questType: string) => void;
 }
@@ -129,6 +133,10 @@ export default function MapView({
   jumpMarker,
   geometryCatalog,
   filters,
+  identifyResults,
+  selectedFeatureId,
+  onIdentify,
+  onClearIdentify,
   onToggleGeometryLayer,
   onToggleQuestType,
 }: MapViewProps) {
@@ -147,6 +155,8 @@ export default function MapView({
     point: LngLatPoint;
     copied: string | null;
   } | null>(null);
+  const highlightedFeatureRef = useRef<{ questId: string; source: string; id: string | number } | null>(null);
+  const [identifyResultsInternal, setIdentifyResultsInternal] = useState<IdentifyResults | null>(null);
 
   const pointFeatureCount = geometryCatalog?.points.features.length || 0;
   const polygonFeatureCount = geometryCatalog?.polygons.features.length || 0;
@@ -179,6 +189,25 @@ export default function MapView({
       setContextMenu((current) => current ? { ...current, copied: label } : current);
     }
   }, []);
+
+  const handleIdentify = useCallback(() => {
+    const map = mapRef.current;
+    if (!map || !contextMenu) {
+      return;
+    }
+    const location = contextMenu.point;
+    const zoom = map.getZoom();
+    const features = identifyFeaturesAtPoint(location, zoom, geometryCatalog);
+    const results: IdentifyResults = { location, features };
+    setIdentifyResultsInternal(results);
+    onIdentify(results);
+    setContextMenu(null);
+  }, [contextMenu, geometryCatalog, onIdentify]);
+
+  const clearIdentify = useCallback(() => {
+    setIdentifyResultsInternal(null);
+    onClearIdentify();
+  }, [onClearIdentify]);
 
   const renderLabels = useCallback((map: maplibregl.Map) => {
     const palette = getMapPalette(mode);
@@ -437,10 +466,25 @@ export default function MapView({
           source: POINT_SOURCE_ID,
           filter: ['==', ['get', 'quest_type'], questType],
           paint: {
-            'circle-radius': 6,
-            'circle-color': color,
+            'circle-radius': [
+              'case',
+              ['boolean', ['feature-state', 'highlight'], false],
+              10,
+              6,
+            ],
+            'circle-color': [
+              'case',
+              ['boolean', ['feature-state', 'highlight'], false],
+              '#ff6b6b',
+              color,
+            ],
             'circle-stroke-color': '#ffffff',
-            'circle-stroke-width': 1.5,
+            'circle-stroke-width': [
+              'case',
+              ['boolean', ['feature-state', 'highlight'], false],
+              3,
+              1.5,
+            ],
           },
         });
       }
@@ -452,8 +496,18 @@ export default function MapView({
           source: POLYGON_SOURCE_ID,
           filter: ['==', ['get', 'quest_type'], questType],
           paint: {
-            'fill-color': color,
-            'fill-opacity': 0.3,
+            'fill-color': [
+              'case',
+              ['boolean', ['feature-state', 'highlight'], false],
+              '#ff6b6b',
+              color,
+            ],
+            'fill-opacity': [
+              'case',
+              ['boolean', ['feature-state', 'highlight'], false],
+              0.6,
+              0.3,
+            ],
           },
         });
       }
@@ -465,8 +519,18 @@ export default function MapView({
           source: POLYGON_SOURCE_ID,
           filter: ['==', ['get', 'quest_type'], questType],
           paint: {
-            'line-color': color,
-            'line-width': 2,
+            'line-color': [
+              'case',
+              ['boolean', ['feature-state', 'highlight'], false],
+              '#ff6b6b',
+              color,
+            ],
+            'line-width': [
+              'case',
+              ['boolean', ['feature-state', 'highlight'], false],
+              4,
+              2,
+            ],
           },
         });
       }
@@ -476,11 +540,38 @@ export default function MapView({
   }, [geometryCatalog, mapReady, syncLayerVisibility]);
 
   useEffect(() => {
-    if (!mapRef.current) {
+    if (!mapRef.current || selectedFeatureId === null || selectedFeatureId === undefined) {
       return;
     }
-    syncLayerVisibility(mapRef.current, geometryCatalog?.quest_types || []);
-  }, [filters, geometryCatalog, syncLayerVisibility]);
+    const map = mapRef.current;
+    const sourceId = map.getSource(POINT_SOURCE_ID) ? POINT_SOURCE_ID : (map.getSource(POLYGON_SOURCE_ID) ? POLYGON_SOURCE_ID : null);
+    if (!sourceId) {
+      return;
+    }
+    const source = map.getSource(sourceId) as maplibregl.GeoJSONSource;
+    if (!source) {
+      return;
+    }
+    const data = source._data as GeoFeatureCollection | undefined;
+    if (!data?.features) {
+      return;
+    }
+    const feature = data.features.find((f) => {
+      const questId = f.properties?.quest_id;
+      return questId !== undefined && String(questId) === String(selectedFeatureId);
+    });
+    if (feature && highlightedFeatureRef.current) {
+      const prev = highlightedFeatureRef.current;
+      map.setFeatureState({ source: prev.source, id: prev.id }, { highlight: false });
+    }
+    if (feature) {
+      const featureId = feature.id;
+      if (featureId !== undefined) {
+        map.setFeatureState({ source: sourceId, id: featureId }, { highlight: true });
+        highlightedFeatureRef.current = { questId: String(selectedFeatureId), source: sourceId, id: featureId };
+      }
+    }
+  }, [selectedFeatureId]);
 
   return (
     <div style={S.wrap}>
@@ -506,6 +597,8 @@ export default function MapView({
           <button style={S.contextButton} onClick={() => void copyText('D', formatD(contextMenu.point))}>Copy D</button>
           <button style={S.contextButton} onClick={() => void copyText('DMS', formatDMS(contextMenu.point))}>Copy DMS</button>
           <button style={S.contextButton} onClick={() => void copyText('All formats', formatAllCoordinateTypes(contextMenu.point))}>Copy Full Coord Set</button>
+          <div style={S.divider} />
+          <button style={S.contextButton} onClick={handleIdentify}>Identify Features</button>
           {contextMenu.copied && <div style={S.contextStatus}>Copied: {contextMenu.copied}</div>}
         </div>
       )}

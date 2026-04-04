@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
 
 import AttributeTable from '../components/AttributeTable';
+import IdentifyPanel from '../components/IdentifyPanel';
 import MapView from '../components/MapView';
 import Navbar from '../components/Navbar';
 import QuestPanel from '../components/QuestPanel';
 import { useQuests } from '../hooks/useQuests';
 import { deleteQuestPointGeometry, deleteQuestPolygonGeometry, getFinishedGeometryCatalog, getGeometryCatalog, saveQuestPointGeometry, updateQuest, uploadQuestPointsGeometry, uploadQuestPolygonGeometry } from '../services/api';
 import { getFeaturePoint, getQuestGeometryBounds } from '../utils/geo';
-import type { GeometryCatalog, LayerFilters, LngLatPoint, MapBounds, Quest } from '../types/domain';
+import type { GeometryCatalog, IdentifiedFeature, IdentifyResults, LayerFilters, LngLatPoint, MapBounds, Quest } from '../types/domain';
 
 const MIN_WIDTH = 220;
 const MAX_WIDTH = 600;
@@ -51,6 +52,8 @@ export default function HomePage() {
     questTypes: {},
   });
   const [tableViewMode, setTableViewMode] = useState<'all' | 'active' | 'finished'>('all');
+  const [identifyResults, setIdentifyResults] = useState<IdentifyResults | null>(null);
+  const [selectedIdentifyFeatureId, setSelectedIdentifyFeatureId] = useState<string | number | null>(null);
 
   const localQuests = useMemo(
     () => quests.filter((quest) => !quest.id.startsWith('external:') && quest.status !== 'Done' && quest.status !== 'Approved'),
@@ -191,6 +194,22 @@ export default function HomePage() {
     }));
   }, []);
 
+  const handleIdentify = useCallback((results: IdentifyResults) => {
+    setIdentifyResults(results);
+    setSelectedIdentifyFeatureId(null);
+  }, []);
+
+  const handleClearIdentify = useCallback(() => {
+    setIdentifyResults(null);
+    setSelectedIdentifyFeatureId(null);
+  }, []);
+
+  const handleIdentifyFeatureSelect = useCallback((feature: IdentifiedFeature) => {
+    const questId = feature.feature.properties?.quest_id;
+    const featureId = questId !== undefined && questId !== null ? String(questId) : (feature.feature.id !== undefined ? String(feature.feature.id) : null);
+    setSelectedIdentifyFeatureId(featureId);
+  }, []);
+
   const handleUpdateQuest = useCallback(async (quest: Quest) => {
     const { id, title, status, priority, assigned_user, group, year, date, notes } = quest;
     await updateQuest(id, { title, status, priority, assigned_user, group, year, date, notes });
@@ -290,9 +309,22 @@ export default function HomePage() {
             jumpMarker={jumpMarker}
             geometryCatalog={filteredGeometryCatalog}
             filters={layerFilters}
+            identifyResults={identifyResults}
+            selectedFeatureId={selectedIdentifyFeatureId}
+            onIdentify={handleIdentify}
+            onClearIdentify={handleClearIdentify}
             onToggleGeometryLayer={handleToggleGeometryLayer}
             onToggleQuestType={handleToggleQuestType}
           />
+
+          {identifyResults && (
+            <IdentifyPanel
+              results={identifyResults}
+              onClose={handleClearIdentify}
+              onFeatureSelect={handleIdentifyFeatureSelect}
+              selectedFeatureId={selectedIdentifyFeatureId}
+            />
+          )}
 
           {tableOpen && (
             <div style={{ ...S.tableAnchor, height: tableHeight, cursor: dragTable ? 'row-resize' : 'default' }}>

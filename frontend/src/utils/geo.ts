@@ -1,4 +1,4 @@
-import type { GeoFeature, GeoFeatureCollection, GeometryCatalog, LngLatPoint, MapBounds } from '../types/domain';
+import type { GeoFeature, GeoFeatureCollection, GeometryCatalog, IdentifiedFeature, LngLatPoint, MapBounds } from '../types/domain';
 
 const UTM_SCALE_FACTOR = 0.9996;
 const UTM_EQUATORIAL_RADIUS = 6378137.0;
@@ -330,4 +330,133 @@ export function formatAllCoordinateTypes(point: LngLatPoint): string {
     `DMS: ${formatDMS(point)}`,
     `UTM: ${formatUTM(point)}`,
   ].join('\n');
+}
+
+function haversineDistance(lng1: number, lat1: number, lng2: number, lat2: number): number {
+  const R = 6371000;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+function getFeatureCenter(feature: GeoFeature): LngLatPoint | null {
+  if (!feature.geometry) {
+    return null;
+  }
+  return getFeaturePoint(feature) || null;
+}
+
+function getPolygonCenter(coordinates: unknown): LngLatPoint | null {
+  const points: LngLatPoint[] = [];
+  visitCoordinates(coordinates, (lng, lat) => {
+    points.push({ lng, lat });
+  });
+  if (points.length === 0) {
+    return null;
+  }
+  const sumLng = points.reduce((acc, p) => acc + p.lng, 0);
+  const sumLat = points.reduce((acc, p) => acc + p.lat, 0);
+  return {
+    lng: sumLng / points.length,
+    lat: sumLat / points.length,
+  };
+}
+
+function isPointInRadius(center: LngLatPoint, feature: GeoFeature, radiusMeters: number): boolean {
+  const coords = feature.geometry?.coordinates;
+  if (!coords) {
+    return false;
+  }
+  const type = feature.geometry?.type;
+  if (type === 'Point') {
+    const point = extractPointCoordinates(coords);
+    if (!point) {
+      return false;
+    }
+    const dist = haversineDistance(center.lng, center.lat, point[0], point[1]);
+    return dist <= radiusMeters;
+  }
+  return false;
+}
+
+function isPolygonIntersectingRadius(center: LngLatPoint, feature: GeoFeature, radiusMeters: number): boolean {
+  const coords = feature.geometry?.coordinates;
+  if (!coords) {
+    return false;
+  }
+  const type = feature.geometry?.type;
+  if (type === 'Polygon' || type === 'MultiPolygon') {
+    const polyCenter = getPolygonCenter(coords);
+    if (!polyCenter) {
+      return false;
+    }
+    const dist = haversineDistance(center.lng, center.lat, polyCenter.lng, polyCenter.lat);
+    return dist <= radiusMeters;
+  }
+  return false;
+}
+
+function isLineIntersectingRadius(center: LngLatPoint, feature: GeoFeature, radiusMeters: number): boolean {
+  const coords = feature.geometry?.coordinates;
+  if (!coords) {
+    return false;
+  }
+  const type = feature.geometry?.type;
+  if (type === 'LineString' || type === 'MultiLineString') {
+    const points: LngLatPoint[] = [];
+    visitCoordinates(coords, (lng, lat) => {
+      points.push({ lng, lat });
+    });
+    for (const point of points) {
+      const dist = haversineDistance(center.lng, center.lat, point.lng, point.lat);
+      if (dist <= radiusMeters) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+export function calculateSearchRadius(zoom: number): number {
+  const baseRadius = 1000;
+  const maxRadius = 50000;
+  const minZoom = 2;
+  const maxZoom = 18;
+  const normalizedZoom = Math.max(minZoom, Math.min(maxZoom, zoom));
+  const t = (normalizedZoom - minZoom) / (maxZoom - minZoom);
+  const radius = maxRadius - (maxRadius - baseRadius) * t;
+  return radius;
+}
+
+export function identifyFeaturesAtPoint(
+  center: LngLatPoint,
+  zoom: number,
+  catalog: GeometryCatalog | null,
+): IdentifiedFeature[] {
+  if (!catalog) {
+    return [];
+  }
+  const radius = calculateSearchRadius(zoom);
+  const results: IdentifiedFeature[] = [];
+  catalog.quest_types.forEach((questType) => {
+    const layerName = questType;
+    catalog.points.features
+      .filter((f) => String(f.properties?.quest_type || f.properties?.ft || '') === questType)
+      .filter((f) => isPointInRadius(center, f, radius))
+      .forEach((feature) => {
+        results.push({ feature, layerName, geometryType: 'point' });
+      });
+    catalog.polygons.features
+      .filter((f) => String(f.properties?.quest_type || f.properties?.ft || '') === questType)
+      .filter((f) => isPolygonIntersectingRadius(center, f, radius) || isLineIntersectingRadius(center, f, radius))
+      .forEach((feature) => {
+        const polyType = feature.geometry?.type === 'LineString' || feature.geometry?.type === 'MultiLineString' ? 'polygon' : 'polygon';
+        results.push({ feature, layerName, geometryType: polyType });
+      });
+  });
+  return results;
 }

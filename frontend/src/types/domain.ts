@@ -180,3 +180,14 @@ export interface LngLatPoint {
 }
 
 export type MapBounds = [[number, number], [number, number]];
+
+export interface IdentifiedFeature {
+  feature: GeoFeature;
+  layerName: string;
+  geometryType: 'point' | 'polygon';
+}
+
+export interface IdentifyResults {
+  location: LngLatPoint;
+  features: IdentifiedFeature[];
+}
