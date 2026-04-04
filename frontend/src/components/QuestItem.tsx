@@ -173,8 +173,13 @@ export default function QuestItem({
       await completeQuestWithAccuracy(quest.id, accuracyXy, accuracyZ);
       showMsg('✓ המשימה הושלמה בהצלחה', 'success');
       await onRefresh();
-    } catch {
-      showMsg('✗ שגיאה בהשלמת המשימה', 'error');
+    } catch (err) {
+      const detail =
+        typeof err === 'object' &&
+        err &&
+        'response' in err &&
+        (err as { response?: { data?: { detail?: string } } }).response?.data?.detail;
+      showMsg(detail ? `✗ שגיאה: ${detail}` : '✗ שגיאה בהשלמת המשימה', 'error');
     }
     setBusy(false);
   };

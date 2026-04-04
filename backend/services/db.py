@@ -196,6 +196,214 @@ def init_db() -> None:
             )
             cur.execute(
                 f"""
+                ALTER TABLE {OPEN_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS geometry_type TEXT[] NULL
+                    CHECK (geometry_type IS NULL OR geometry_type <@ ARRAY['point', 'polygon']);
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {FINISHED_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS geometry_type TEXT[] NULL
+                    CHECK (geometry_type IS NULL OR geometry_type <@ ARRAY['point', 'polygon']);
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {OPEN_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS geometry_status TEXT NOT NULL DEFAULT 'missing'
+                    CHECK (geometry_status IN ('missing', 'pending', 'ready', 'error'));
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {FINISHED_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS geometry_status TEXT NOT NULL DEFAULT 'ready'
+                    CHECK (geometry_status IN ('missing', 'pending', 'ready', 'error'));
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {OPEN_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS geometry_geojson JSONB NULL;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {FINISHED_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS geometry_geojson JSONB NULL;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {OPEN_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS geometry_source_path TEXT NULL;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {FINISHED_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS geometry_source_path TEXT NULL;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {OPEN_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS geometry_source_name TEXT NULL;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {FINISHED_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS geometry_source_name TEXT NULL;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {OPEN_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS geometry_upload_kind TEXT NULL;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {FINISHED_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS geometry_upload_kind TEXT NULL;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {OPEN_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS geometry_feature_count INTEGER NOT NULL DEFAULT 0;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {FINISHED_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS geometry_feature_count INTEGER NOT NULL DEFAULT 0;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {OPEN_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS geometry_utm_zone INTEGER NULL;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {FINISHED_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS geometry_utm_zone INTEGER NULL;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {OPEN_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS geometry_utm_band TEXT NULL;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {FINISHED_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS geometry_utm_band TEXT NULL;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {OPEN_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS geometry_utm_easting DOUBLE PRECISION NULL;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {FINISHED_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS geometry_utm_easting DOUBLE PRECISION NULL;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {OPEN_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS geometry_utm_northing DOUBLE PRECISION NULL;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {FINISHED_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS geometry_utm_northing DOUBLE PRECISION NULL;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {OPEN_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS geometry_point_geojson JSONB NULL;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {FINISHED_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS geometry_point_geojson JSONB NULL;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {OPEN_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS geometry_polygon_geojson JSONB NULL;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {FINISHED_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS geometry_polygon_geojson JSONB NULL;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {OPEN_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS geometry_point_feature_count INTEGER NOT NULL DEFAULT 0;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {FINISHED_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS geometry_point_feature_count INTEGER NOT NULL DEFAULT 0;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {OPEN_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS geometry_polygon_feature_count INTEGER NOT NULL DEFAULT 0;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {FINISHED_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS geometry_polygon_feature_count INTEGER NOT NULL DEFAULT 0;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {OPEN_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS geometry_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {FINISHED_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS geometry_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {FINISHED_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS accuracy_xy DOUBLE PRECISION NULL;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {FINISHED_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS accuracy_z DOUBLE PRECISION NULL;
+                """
+            )
+            cur.execute(
+                f"""
                 CREATE UNIQUE INDEX IF NOT EXISTS open_quests_sync_external_id_unique
                 ON {OPEN_QUESTS_TABLE} (sync_external_id)
                 WHERE sync_external_id IS NOT NULL;
@@ -209,147 +417,27 @@ def init_db() -> None:
                 """
             )
             cur.execute(
-                """
-                CREATE TABLE IF NOT EXISTS quest_geometries (
-                    quest_id UUID PRIMARY KEY,
-                    geometry_type TEXT[] NULL CHECK (geometry_type IS NULL OR geometry_type <@ ARRAY['point', 'polygon']),
-                    geometry_status TEXT NOT NULL DEFAULT 'missing'
-                        CHECK (geometry_status IN ('missing', 'pending', 'ready', 'error')),
-                    geometry_geojson JSONB NULL,
-                    source_path TEXT NULL,
-                    source_name TEXT NULL,
-                    upload_kind TEXT NULL,
-                    feature_count INTEGER NOT NULL DEFAULT 0,
-                    utm_zone INTEGER NULL,
-                    utm_band TEXT NULL,
-                    utm_easting DOUBLE PRECISION NULL,
-                    utm_northing DOUBLE PRECISION NULL,
-                    point_geojson JSONB NULL,
-                    polygon_geojson JSONB NULL,
-                    point_feature_count INTEGER NOT NULL DEFAULT 0,
-                    polygon_feature_count INTEGER NOT NULL DEFAULT 0,
-                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-                );
+                f"""
+                CREATE INDEX IF NOT EXISTS open_quests_geometry_type_idx
+                ON {OPEN_QUESTS_TABLE} USING BTREE (geometry_type);
                 """
             )
             cur.execute(
-                """
-                CREATE INDEX IF NOT EXISTS quest_geometries_geometry_type_idx
-                ON quest_geometries USING BTREE (geometry_type);
-                """
-            )
-            cur.execute(
-                """
-                CREATE INDEX IF NOT EXISTS quest_geometries_geometry_status_idx
-                ON quest_geometries (geometry_status);
+                f"""
+                CREATE INDEX IF NOT EXISTS open_quests_geometry_status_idx
+                ON {OPEN_QUESTS_TABLE} (geometry_status);
                 """
             )
             cur.execute(
-                """
-                CREATE TABLE IF NOT EXISTS finished_quest_geometries (
-                    quest_id UUID PRIMARY KEY,
-                    geometry_type TEXT[] NULL CHECK (geometry_type IS NULL OR geometry_type <@ ARRAY['point', 'polygon']),
-                    geometry_status TEXT NOT NULL DEFAULT 'ready'
-                        CHECK (geometry_status IN ('ready')),
-                    geometry_geojson JSONB NULL,
-                    source_path TEXT NULL,
-                    source_name TEXT NULL,
-                    upload_kind TEXT NULL,
-                    feature_count INTEGER NOT NULL DEFAULT 0,
-                    utm_zone INTEGER NULL,
-                    utm_band TEXT NULL,
-                    utm_easting DOUBLE PRECISION NULL,
-                    utm_northing DOUBLE PRECISION NULL,
-                    point_geojson JSONB NULL,
-                    polygon_geojson JSONB NULL,
-                    point_feature_count INTEGER NOT NULL DEFAULT 0,
-                    polygon_feature_count INTEGER NOT NULL DEFAULT 0,
-                    accuracy_xy DOUBLE PRECISION NOT NULL,
-                    accuracy_z DOUBLE PRECISION NOT NULL,
-                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-                );
+                f"""
+                CREATE INDEX IF NOT EXISTS finished_quests_geometry_type_idx
+                ON {FINISHED_QUESTS_TABLE} USING BTREE (geometry_type);
                 """
             )
             cur.execute(
-                """
-                CREATE INDEX IF NOT EXISTS finished_quest_geometries_geometry_type_idx
-                ON finished_quest_geometries USING BTREE (geometry_type);
-                """
-            )
-            cur.execute(
-                """
-                DO $$
-                BEGIN
-                    IF NOT EXISTS (
-                        SELECT 1 FROM information_schema.columns 
-                        WHERE table_name = 'quest_geometries' AND column_name = 'point_geojson'
-                    ) THEN
-                        ALTER TABLE quest_geometries 
-                        ADD COLUMN point_geojson JSONB NULL,
-                        ADD COLUMN polygon_geojson JSONB NULL,
-                        ADD COLUMN point_feature_count INTEGER NOT NULL DEFAULT 0,
-                        ADD COLUMN polygon_feature_count INTEGER NOT NULL DEFAULT 0;
-                    END IF;
-                END
-                $$;
-                """
-            )
-            cur.execute(
-                """
-                DO $$
-                BEGIN
-                    IF NOT EXISTS (
-                        SELECT 1 FROM information_schema.columns 
-                        WHERE table_name = 'finished_quest_geometries' AND column_name = 'point_geojson'
-                    ) THEN
-                        ALTER TABLE finished_quest_geometries 
-                        ADD COLUMN point_geojson JSONB NULL,
-                        ADD COLUMN polygon_geojson JSONB NULL,
-                        ADD COLUMN point_feature_count INTEGER NOT NULL DEFAULT 0,
-                        ADD COLUMN polygon_feature_count INTEGER NOT NULL DEFAULT 0;
-                    END IF;
-                END
-                $$;
-                """
-            )
-            cur.execute(
-                """
-                DO $$
-                BEGIN
-                    IF EXISTS (
-                        SELECT 1 FROM pg_attribute 
-                        WHERE attrelid = 'quest_geometries'::regclass 
-                        AND attname = 'geometry_type' 
-                        AND atttypid = (SELECT oid FROM pg_type WHERE typname = 'text')
-                    ) THEN
-                        ALTER TABLE quest_geometries ADD COLUMN geometry_type_new TEXT[];
-                        UPDATE quest_geometries SET geometry_type_new = CASE WHEN geometry_type IS NULL THEN NULL ELSE ARRAY[geometry_type::text] END;
-                        ALTER TABLE quest_geometries DROP COLUMN geometry_type;
-                        ALTER TABLE quest_geometries RENAME COLUMN geometry_type_new TO geometry_type;
-                    END IF;
-                END
-                $$;
-                """
-            )
-            cur.execute(
-                """
-                DO $$
-                BEGIN
-                    IF EXISTS (
-                        SELECT 1 FROM pg_attribute 
-                        WHERE attrelid = 'finished_quest_geometries'::regclass 
-                        AND attname = 'geometry_type' 
-                        AND atttypid = (SELECT oid FROM pg_type WHERE typname = 'text')
-                    ) THEN
-                        ALTER TABLE finished_quest_geometries ADD COLUMN geometry_type_new TEXT[];
-                        UPDATE finished_quest_geometries SET geometry_type_new = CASE WHEN geometry_type IS NULL THEN NULL ELSE ARRAY[geometry_type::text] END;
-                        ALTER TABLE finished_quest_geometries DROP COLUMN geometry_type;
-                        ALTER TABLE finished_quest_geometries RENAME COLUMN geometry_type_new TO geometry_type;
-                    END IF;
-                END
-                $$;
+                f"""
+                CREATE INDEX IF NOT EXISTS finished_quests_geometry_status_idx
+                ON {FINISHED_QUESTS_TABLE} (geometry_status);
                 """
             )
             cur.execute(
@@ -357,12 +445,22 @@ def init_db() -> None:
                 INSERT INTO {FINISHED_QUESTS_TABLE} (
                     id, title, description, status, "תעדוף", date, assigned_user,
                     shapefile_path, group_name, year, ft, "מצייח",
-                    sync_external_id, sync_source, sync_name
+                    sync_external_id, sync_source, sync_name,
+                    geometry_type, geometry_status, geometry_geojson, geometry_source_path,
+                    geometry_source_name, geometry_upload_kind, geometry_feature_count,
+                    geometry_utm_zone, geometry_utm_band, geometry_utm_easting, geometry_utm_northing,
+                    geometry_point_geojson, geometry_polygon_geojson,
+                    geometry_point_feature_count, geometry_polygon_feature_count, geometry_updated_at
                 )
                 SELECT
                     id, title, description, status, "תעדוף", date, assigned_user,
                     shapefile_path, group_name, year, ft, "מצייח",
-                    sync_external_id, sync_source, sync_name
+                    sync_external_id, sync_source, sync_name,
+                    geometry_type, geometry_status, geometry_geojson, geometry_source_path,
+                    geometry_source_name, geometry_upload_kind, geometry_feature_count,
+                    geometry_utm_zone, geometry_utm_band, geometry_utm_easting, geometry_utm_northing,
+                    geometry_point_geojson, geometry_polygon_geojson,
+                    geometry_point_feature_count, geometry_polygon_feature_count, geometry_updated_at
                 FROM {OPEN_QUESTS_TABLE}
                 WHERE status IN ('Done', 'Approved')
                 ON CONFLICT (id) DO NOTHING;
@@ -374,6 +472,120 @@ def init_db() -> None:
                 WHERE status IN ('Done', 'Approved');
                 """
             )
+            cur.execute(
+                f"""
+                DO $$
+                BEGIN
+                    IF EXISTS (
+                        SELECT 1
+                        FROM information_schema.tables
+                        WHERE table_schema = 'public' AND table_name = 'quest_geometries'
+                    ) THEN
+                        UPDATE {OPEN_QUESTS_TABLE} AS q
+                        SET
+                            geometry_type = g.geometry_type,
+                            geometry_status = COALESCE(g.geometry_status,
+                                CASE WHEN q.shapefile_path IS NOT NULL THEN 'pending' ELSE 'missing' END),
+                            geometry_geojson = g.geometry_geojson,
+                            geometry_source_path = COALESCE(g.source_path, q.shapefile_path),
+                            geometry_source_name = g.source_name,
+                            geometry_upload_kind = g.upload_kind,
+                            geometry_feature_count = COALESCE(g.feature_count, 0),
+                            geometry_utm_zone = g.utm_zone,
+                            geometry_utm_band = g.utm_band,
+                            geometry_utm_easting = g.utm_easting,
+                            geometry_utm_northing = g.utm_northing,
+                            geometry_point_geojson = g.point_geojson,
+                            geometry_polygon_geojson = g.polygon_geojson,
+                            geometry_point_feature_count = COALESCE(g.point_feature_count, 0),
+                            geometry_polygon_feature_count = COALESCE(g.polygon_feature_count, 0),
+                            geometry_updated_at = COALESCE(g.updated_at, q.geometry_updated_at, NOW())
+                        FROM quest_geometries AS g
+                        WHERE g.quest_id = q.id;
+
+                        UPDATE {FINISHED_QUESTS_TABLE} AS q
+                        SET
+                            geometry_type = g.geometry_type,
+                            geometry_status = COALESCE(g.geometry_status,
+                                CASE WHEN q.shapefile_path IS NOT NULL THEN 'pending' ELSE 'missing' END),
+                            geometry_geojson = g.geometry_geojson,
+                            geometry_source_path = COALESCE(g.source_path, q.shapefile_path),
+                            geometry_source_name = g.source_name,
+                            geometry_upload_kind = g.upload_kind,
+                            geometry_feature_count = COALESCE(g.feature_count, 0),
+                            geometry_utm_zone = g.utm_zone,
+                            geometry_utm_band = g.utm_band,
+                            geometry_utm_easting = g.utm_easting,
+                            geometry_utm_northing = g.utm_northing,
+                            geometry_point_geojson = g.point_geojson,
+                            geometry_polygon_geojson = g.polygon_geojson,
+                            geometry_point_feature_count = COALESCE(g.point_feature_count, 0),
+                            geometry_polygon_feature_count = COALESCE(g.polygon_feature_count, 0),
+                            geometry_updated_at = COALESCE(g.updated_at, q.geometry_updated_at, NOW())
+                        FROM quest_geometries AS g
+                        WHERE g.quest_id = q.id;
+                    END IF;
+
+                    IF EXISTS (
+                        SELECT 1
+                        FROM information_schema.tables
+                        WHERE table_schema = 'public' AND table_name = 'finished_quest_geometries'
+                    ) THEN
+                        UPDATE {FINISHED_QUESTS_TABLE} AS q
+                        SET
+                            geometry_type = g.geometry_type,
+                            geometry_status = COALESCE(g.geometry_status, 'ready'),
+                            geometry_geojson = g.geometry_geojson,
+                            geometry_source_path = g.source_path,
+                            geometry_source_name = g.source_name,
+                            geometry_upload_kind = g.upload_kind,
+                            geometry_feature_count = COALESCE(g.feature_count, 0),
+                            geometry_utm_zone = g.utm_zone,
+                            geometry_utm_band = g.utm_band,
+                            geometry_utm_easting = g.utm_easting,
+                            geometry_utm_northing = g.utm_northing,
+                            geometry_point_geojson = g.point_geojson,
+                            geometry_polygon_geojson = g.polygon_geojson,
+                            geometry_point_feature_count = COALESCE(g.point_feature_count, 0),
+                            geometry_polygon_feature_count = COALESCE(g.polygon_feature_count, 0),
+                            geometry_updated_at = COALESCE(g.updated_at, q.geometry_updated_at, NOW()),
+                            accuracy_xy = g.accuracy_xy,
+                            accuracy_z = g.accuracy_z
+                        FROM finished_quest_geometries AS g
+                        WHERE g.quest_id = q.id;
+                    END IF;
+                END
+                $$;
+                """
+            )
+            cur.execute(
+                f"""
+                UPDATE {OPEN_QUESTS_TABLE}
+                SET
+                    geometry_status = CASE
+                        WHEN geometry_status IS NULL AND shapefile_path IS NOT NULL THEN 'pending'
+                        WHEN geometry_status IS NULL THEN 'missing'
+                        ELSE geometry_status
+                    END,
+                    geometry_source_path = COALESCE(geometry_source_path, shapefile_path),
+                    geometry_updated_at = COALESCE(geometry_updated_at, NOW());
+                """
+            )
+            cur.execute(
+                f"""
+                UPDATE {FINISHED_QUESTS_TABLE}
+                SET
+                    geometry_status = CASE
+                        WHEN geometry_status IS NULL AND shapefile_path IS NOT NULL THEN 'pending'
+                        WHEN geometry_status IS NULL THEN 'missing'
+                        ELSE geometry_status
+                    END,
+                    geometry_source_path = COALESCE(geometry_source_path, shapefile_path),
+                    geometry_updated_at = COALESCE(geometry_updated_at, NOW());
+                """
+            )
+            cur.execute("DROP TABLE IF EXISTS quest_geometries;")
+            cur.execute("DROP TABLE IF EXISTS finished_quest_geometries;")
             cur.execute(
                 """
                 CREATE TABLE IF NOT EXISTS external_quests (
@@ -512,39 +724,25 @@ def init_db() -> None:
 
             cur.execute(
                 f"""
-                INSERT INTO quest_geometries (
-                    quest_id,
-                    geometry_status,
-                    source_path,
-                    feature_count,
-                    created_at,
-                    updated_at
-                )
-                SELECT
-                    all_quests.id,
-                    CASE
-                        WHEN all_quests.shapefile_path IS NOT NULL THEN 'pending'
-                        ELSE 'missing'
-                    END AS geometry_status,
-                    all_quests.shapefile_path,
-                    0,
-                    NOW(),
-                    NOW()
-                FROM (
-                    SELECT id, shapefile_path FROM {OPEN_QUESTS_TABLE}
-                    UNION
-                    SELECT id, shapefile_path FROM {FINISHED_QUESTS_TABLE}
-                ) AS all_quests
-                ON CONFLICT (quest_id)
-                DO UPDATE SET
-                    source_path = COALESCE(quest_geometries.source_path, EXCLUDED.source_path),
+                UPDATE {OPEN_QUESTS_TABLE}
+                SET
                     geometry_status = CASE
-                        WHEN quest_geometries.geometry_status = 'missing'
-                             AND quest_geometries.geometry_type IS NULL
-                             AND quest_geometries.geometry_geojson IS NULL
-                             AND EXCLUDED.source_path IS NOT NULL
-                        THEN 'pending'
-                        ELSE quest_geometries.geometry_status
-                    END;
+                        WHEN shapefile_path IS NOT NULL THEN 'pending'
+                        ELSE geometry_status
+                    END,
+                    geometry_source_path = COALESCE(geometry_source_path, shapefile_path),
+                    geometry_updated_at = COALESCE(geometry_updated_at, NOW());
+                """
+            )
+            cur.execute(
+                f"""
+                UPDATE {FINISHED_QUESTS_TABLE}
+                SET
+                    geometry_status = CASE
+                        WHEN shapefile_path IS NOT NULL THEN 'pending'
+                        ELSE geometry_status
+                    END,
+                    geometry_source_path = COALESCE(geometry_source_path, shapefile_path),
+                    geometry_updated_at = COALESCE(geometry_updated_at, NOW());
                 """
             )

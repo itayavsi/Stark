@@ -74,15 +74,15 @@ def _quest_columns(table_alias: str = "q") -> str:
         {prefix}sync_external_id,
         {prefix}sync_source,
         {prefix}sync_name,
-        g.geometry_type,
+        {prefix}geometry_type,
         COALESCE(
-            g.geometry_status,
+            {prefix}geometry_status,
             CASE WHEN {prefix}shapefile_path IS NOT NULL THEN 'pending' ELSE 'missing' END
         ) AS geometry_status,
-        COALESCE(g.source_path, {prefix}shapefile_path) AS geometry_source_path,
-        g.source_name AS geometry_source_name,
-        COALESCE(g.feature_count, 0) AS geometry_feature_count,
-        g.updated_at AS geometry_updated_at
+        COALESCE({prefix}geometry_source_path, {prefix}shapefile_path) AS geometry_source_path,
+        {prefix}geometry_source_name AS geometry_source_name,
+        COALESCE({prefix}geometry_feature_count, 0) AS geometry_feature_count,
+        {prefix}geometry_updated_at AS geometry_updated_at
     """
 
 
@@ -91,7 +91,6 @@ def _quest_table_query(table_name: str, table_alias: str = "q") -> str:
         SELECT
             {_quest_columns(table_alias)}
         FROM {table_name} AS {table_alias}
-        LEFT JOIN quest_geometries AS g ON g.quest_id = {table_alias}.id
     """
 
 
@@ -273,12 +272,14 @@ def save_quest(quest: Dict):
                 INSERT INTO {target_table} (
                     id, title, description, status, "תעדוף", date, assigned_user,
                     shapefile_path, group_name, year, ft, "מצייח",
-                    sync_external_id, sync_source, sync_name
+                    sync_external_id, sync_source, sync_name,
+                    geometry_status, geometry_source_path, geometry_feature_count, geometry_updated_at
                 )
                 VALUES (
                     %(id)s, %(title)s, %(description)s, %(status)s, %(priority)s, %(date)s, %(assigned_user)s,
                     %(shapefile_path)s, %(group_name)s, %(year)s, %(ft)s, %(matziah)s,
-                    %(sync_external_id)s, %(sync_source)s, %(sync_name)s
+                    %(sync_external_id)s, %(sync_source)s, %(sync_name)s,
+                    %(geometry_status)s, %(geometry_source_path)s, %(geometry_feature_count)s, NOW()
                 );
                 """,
                 {
@@ -297,32 +298,9 @@ def save_quest(quest: Dict):
                     "sync_external_id": quest.get("sync_external_id"),
                     "sync_source": quest.get("sync_source"),
                     "sync_name": quest.get("sync_name"),
-                },
-            )
-            cur.execute(
-                """
-                INSERT INTO quest_geometries (
-                    quest_id,
-                    geometry_status,
-                    source_path,
-                    feature_count,
-                    created_at,
-                    updated_at
-                )
-                VALUES (
-                    %(quest_id)s,
-                    %(geometry_status)s,
-                    %(source_path)s,
-                    0,
-                    NOW(),
-                    NOW()
-                )
-                ON CONFLICT (quest_id) DO NOTHING;
-                """,
-                {
-                    "quest_id": quest["id"],
                     "geometry_status": "pending" if quest.get("shapefile_path") else "missing",
-                    "source_path": quest.get("shapefile_path"),
+                    "geometry_source_path": quest.get("shapefile_path"),
+                    "geometry_feature_count": 0,
                 },
             )
 
@@ -377,38 +355,30 @@ def update_quest(quest_id: str, updates: Dict) -> Optional[Dict]:
                 if row is not None:
                     if "shapefile_path" in updates:
                         cur.execute(
-                            """
-                            INSERT INTO quest_geometries (
-                                quest_id,
-                                geometry_status,
-                                source_path,
-                                feature_count,
-                                created_at,
-                                updated_at
-                            )
-                            VALUES (
-                                %(quest_id)s,
-                                %(geometry_status)s,
-                                %(source_path)s,
-                                0,
-                                NOW(),
-                                NOW()
-                            )
-                            ON CONFLICT (quest_id)
-                            DO UPDATE SET
-                                source_path = COALESCE(quest_geometries.source_path, EXCLUDED.source_path),
+                            f"""
+                            UPDATE {table_name}
+                            SET
+                                geometry_source_path = COALESCE(geometry_source_path, %(source_path)s),
                                 geometry_status = CASE
-                                    WHEN quest_geometries.geometry_type IS NULL
-                                         AND quest_geometries.geometry_geojson IS NULL
-                                         AND EXCLUDED.source_path IS NOT NULL
+                                    WHEN geometry_type IS NULL
+                                         AND geometry_geojson IS NULL
+                                         AND geometry_point_geojson IS NULL
+                                         AND geometry_polygon_geojson IS NULL
+                                         AND %(source_path)s IS NOT NULL
                                     THEN 'pending'
-                                    ELSE quest_geometries.geometry_status
+                                    WHEN geometry_type IS NULL
+                                         AND geometry_geojson IS NULL
+                                         AND geometry_point_geojson IS NULL
+                                         AND geometry_polygon_geojson IS NULL
+                                         AND %(source_path)s IS NULL
+                                    THEN 'missing'
+                                    ELSE geometry_status
                                 END,
-                                updated_at = NOW();
+                                geometry_updated_at = NOW()
+                            WHERE id = %(quest_id)s;
                             """,
                             {
                                 "quest_id": quest_id,
-                                "geometry_status": "pending" if updates.get("shapefile_path") else "missing",
                                 "source_path": updates.get("shapefile_path"),
                             },
                         )
@@ -436,10 +406,33 @@ def move_quest(quest_id: str, destination_table: str, updates: Optional[Dict] = 
         "sync_external_id": "sync_external_id",
         "sync_source": "sync_source",
         "sync_name": "sync_name",
+        "geometry_type": "geometry_type",
+        "geometry_status": "geometry_status",
+        "geometry_geojson": "geometry_geojson",
+        "geometry_source_path": "geometry_source_path",
+        "geometry_source_name": "geometry_source_name",
+        "geometry_upload_kind": "geometry_upload_kind",
+        "geometry_feature_count": "geometry_feature_count",
+        "geometry_utm_zone": "geometry_utm_zone",
+        "geometry_utm_band": "geometry_utm_band",
+        "geometry_utm_easting": "geometry_utm_easting",
+        "geometry_utm_northing": "geometry_utm_northing",
+        "geometry_point_geojson": "geometry_point_geojson",
+        "geometry_polygon_geojson": "geometry_polygon_geojson",
+        "geometry_point_feature_count": "geometry_point_feature_count",
+        "geometry_polygon_feature_count": "geometry_polygon_feature_count",
+        "geometry_updated_at": "geometry_updated_at",
+        "accuracy_xy": "accuracy_xy",
+        "accuracy_z": "accuracy_z",
     }
 
     with get_connection() as conn:
         with conn.cursor() as cur:
+            accuracy_return = (
+                "accuracy_xy, accuracy_z"
+                if source_table == FINISHED_QUESTS_TABLE
+                else "NULL::double precision AS accuracy_xy, NULL::double precision AS accuracy_z"
+            )
             cur.execute(
                 f"""
                 DELETE FROM {source_table}
@@ -460,7 +453,24 @@ def move_quest(quest_id: str, destination_table: str, updates: Optional[Dict] = 
                     "מצייח" AS matziah,
                     sync_external_id,
                     sync_source,
-                    sync_name;
+                    sync_name,
+                    geometry_type,
+                    geometry_status,
+                    geometry_geojson,
+                    geometry_source_path,
+                    geometry_source_name,
+                    geometry_upload_kind,
+                    geometry_feature_count,
+                    geometry_utm_zone,
+                    geometry_utm_band,
+                    geometry_utm_easting,
+                    geometry_utm_northing,
+                    geometry_point_geojson,
+                    geometry_polygon_geojson,
+                    geometry_point_feature_count,
+                    geometry_polygon_feature_count,
+                    geometry_updated_at,
+                    {accuracy_return};
                 """,
                 {"quest_id": quest_id},
             )
@@ -485,40 +495,84 @@ def move_quest(quest_id: str, destination_table: str, updates: Optional[Dict] = 
                 "sync_external_id": row["sync_external_id"],
                 "sync_source": row["sync_source"],
                 "sync_name": row["sync_name"],
+                "geometry_type": row.get("geometry_type"),
+                "geometry_status": row.get("geometry_status"),
+                "geometry_geojson": row.get("geometry_geojson"),
+                "geometry_source_path": row.get("geometry_source_path"),
+                "geometry_source_name": row.get("geometry_source_name"),
+                "geometry_upload_kind": row.get("geometry_upload_kind"),
+                "geometry_feature_count": row.get("geometry_feature_count"),
+                "geometry_utm_zone": row.get("geometry_utm_zone"),
+                "geometry_utm_band": row.get("geometry_utm_band"),
+                "geometry_utm_easting": row.get("geometry_utm_easting"),
+                "geometry_utm_northing": row.get("geometry_utm_northing"),
+                "geometry_point_geojson": row.get("geometry_point_geojson"),
+                "geometry_polygon_geojson": row.get("geometry_polygon_geojson"),
+                "geometry_point_feature_count": row.get("geometry_point_feature_count"),
+                "geometry_polygon_feature_count": row.get("geometry_polygon_feature_count"),
+                "geometry_updated_at": row.get("geometry_updated_at"),
+                "accuracy_xy": row.get("accuracy_xy"),
+                "accuracy_z": row.get("accuracy_z"),
             }
             for key, value in updates.items():
                 if key in allowed_fields:
                     quest[key] = value
 
+            for json_key in ("geometry_geojson", "geometry_point_geojson", "geometry_polygon_geojson"):
+                if isinstance(quest.get(json_key), dict):
+                    quest[json_key] = json.dumps(quest[json_key])
+
+            base_columns = [
+                ("id", "id"),
+                ("title", "title"),
+                ("description", "description"),
+                ("notes", "notes"),
+                ("status", "status"),
+                ('"תעדוף"', "priority"),
+                ("date", "date"),
+                ("assigned_user", "assigned_user"),
+                ("shapefile_path", "shapefile_path"),
+                ("group_name", "group"),
+                ("year", "year"),
+                ("ft", "ft"),
+                ('"מצייח"', "matziah"),
+                ("sync_external_id", "sync_external_id"),
+                ("sync_source", "sync_source"),
+                ("sync_name", "sync_name"),
+                ("geometry_type", "geometry_type"),
+                ("geometry_status", "geometry_status"),
+                ("geometry_geojson", "geometry_geojson"),
+                ("geometry_source_path", "geometry_source_path"),
+                ("geometry_source_name", "geometry_source_name"),
+                ("geometry_upload_kind", "geometry_upload_kind"),
+                ("geometry_feature_count", "geometry_feature_count"),
+                ("geometry_utm_zone", "geometry_utm_zone"),
+                ("geometry_utm_band", "geometry_utm_band"),
+                ("geometry_utm_easting", "geometry_utm_easting"),
+                ("geometry_utm_northing", "geometry_utm_northing"),
+                ("geometry_point_geojson", "geometry_point_geojson"),
+                ("geometry_polygon_geojson", "geometry_polygon_geojson"),
+                ("geometry_point_feature_count", "geometry_point_feature_count"),
+                ("geometry_polygon_feature_count", "geometry_polygon_feature_count"),
+                ("geometry_updated_at", "geometry_updated_at"),
+            ]
+            if destination_table == FINISHED_QUESTS_TABLE:
+                base_columns.extend([("accuracy_xy", "accuracy_xy"), ("accuracy_z", "accuracy_z")])
+
+            columns_sql = ", ".join([col for col, _ in base_columns])
+            values_sql = ", ".join([f"%({param})s" for _, param in base_columns])
+
+            update_assignments = [
+                f"{col} = EXCLUDED.{col}" for col, _ in base_columns if col not in {"id"}
+            ]
+
             cur.execute(
                 f"""
-                INSERT INTO {destination_table} (
-                    id, title, description, notes, status, "תעדוף", date, assigned_user,
-                    shapefile_path, group_name, year, ft, "מצייח",
-                    sync_external_id, sync_source, sync_name
-                )
-                VALUES (
-                    %(id)s, %(title)s, %(description)s, %(notes)s, %(status)s, %(priority)s, %(date)s, %(assigned_user)s,
-                    %(shapefile_path)s, %(group)s, %(year)s, %(ft)s, %(matziah)s,
-                    %(sync_external_id)s, %(sync_source)s, %(sync_name)s
-                )
+                INSERT INTO {destination_table} ({columns_sql})
+                VALUES ({values_sql})
                 ON CONFLICT (id)
                 DO UPDATE SET
-                    title = EXCLUDED.title,
-                    description = EXCLUDED.description,
-                    notes = EXCLUDED.notes,
-                    status = EXCLUDED.status,
-                    "תעדוף" = EXCLUDED."תעדוף",
-                    date = EXCLUDED.date,
-                    assigned_user = EXCLUDED.assigned_user,
-                    shapefile_path = EXCLUDED.shapefile_path,
-                    group_name = EXCLUDED.group_name,
-                    year = EXCLUDED.year,
-                    ft = EXCLUDED.ft,
-                    "מצייח" = EXCLUDED."מצייח",
-                    sync_external_id = EXCLUDED.sync_external_id,
-                    sync_source = EXCLUDED.sync_source,
-                    sync_name = EXCLUDED.sync_name;
+                    {", ".join(update_assignments)};
                 """,
                 quest,
             )
