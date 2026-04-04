@@ -6,6 +6,8 @@ from services.geometry_service import (
     get_finished_geometry_catalog,
     get_geometry_catalog,
     get_quest_geometry,
+    remove_quest_point,
+    remove_quest_polygon,
     save_quest_point_geometry,
     save_quest_polygon_geometry,
 )
@@ -43,6 +45,16 @@ def set_quest_point_geometry(quest_id: str, payload: QuestPointGeometryCreate):
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
+@router.delete("/quests/{quest_id}/point")
+def delete_quest_point_geometry(quest_id: str):
+    try:
+        return remove_quest_point(quest_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
 @router.post("/quests/{quest_id}/polygon-upload")
 async def upload_quest_polygon_geometry(quest_id: str, files: list[UploadFile] = File(...)):
     uploads = []
@@ -60,6 +72,16 @@ async def upload_quest_polygon_geometry(quest_id: str, files: list[UploadFile] =
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.delete("/quests/{quest_id}/polygon")
+def delete_quest_polygon_geometry(quest_id: str):
+    try:
+        return remove_quest_polygon(quest_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 

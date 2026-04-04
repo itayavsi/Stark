@@ -79,6 +79,9 @@ export const getQuestGeometry = (questId: string) =>
 export const saveQuestPointGeometry = (questId: string, utm: string) =>
   api.put<QuestGeometryRecord>(`/geometry/quests/${encodeQuestId(questId)}/point`, { utm }).then((response) => response.data);
 
+export const deleteQuestPointGeometry = (questId: string) =>
+  api.delete<QuestGeometryRecord>(`/geometry/quests/${encodeQuestId(questId)}/point`).then((response) => response.data);
+
 export const uploadQuestPolygonGeometry = (questId: string, files: File[]) => {
   const fd = new FormData();
 
@@ -91,6 +94,9 @@ export const uploadQuestPolygonGeometry = (questId: string, files: File[]) => {
     .post<QuestGeometryRecord>(`/geometry/quests/${encodeQuestId(questId)}/polygon-upload`, fd)
     .then((response) => response.data);
 };
+
+export const deleteQuestPolygonGeometry = (questId: string) =>
+  api.delete<QuestGeometryRecord>(`/geometry/quests/${encodeQuestId(questId)}/polygon`).then((response) => response.data);
 
 export const completeQuestWithAccuracy = (questId: string, accuracy_xy: number, accuracy_z: number) =>
   api.post<QuestGeometryRecord>(`/geometry/quests/${encodeQuestId(questId)}/complete`, { accuracy_xy, accuracy_z }).then((response) => response.data);

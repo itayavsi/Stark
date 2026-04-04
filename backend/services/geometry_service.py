@@ -15,6 +15,8 @@ from services.geometry_storage import (
     get_geometry_by_quest_id,
     get_ready_geometry_records,
     move_geometry_to_finished,
+    remove_quest_point_geometry,
+    remove_quest_polygon_geometry,
     upsert_quest_geometry,
 )
 from services.storage import get_quest_by_id
@@ -433,3 +435,17 @@ def get_finished_geometry_catalog(group: str | None = None) -> Dict[str, Any]:
         "points": {"type": "FeatureCollection", "features": point_features},
         "polygons": {"type": "FeatureCollection", "features": polygon_features},
     }
+
+
+def remove_quest_point(quest_id: str) -> Dict[str, Any] | None:
+    result = remove_quest_point_geometry(quest_id)
+    if result is None:
+        raise LookupError("Quest not found")
+    return result
+
+
+def remove_quest_polygon(quest_id: str) -> Dict[str, Any] | None:
+    result = remove_quest_polygon_geometry(quest_id)
+    if result is None:
+        raise LookupError("Quest not found")
+    return result

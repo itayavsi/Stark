@@ -375,6 +375,113 @@ def upsert_quest_geometry(quest_id: str, geometry: Dict) -> Optional[Dict]:
     return get_geometry_by_quest_id(quest_id)
 
 
+def remove_quest_point_geometry(quest_id: str) -> Optional[Dict]:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT geometry_type, point_geojson, polygon_geojson
+                FROM quest_geometries
+                WHERE quest_id = %(quest_id)s;
+                """,
+                {"quest_id": quest_id},
+            )
+            existing = cur.fetchone()
+            if existing is None:
+                return None
+            
+            current_types = existing["geometry_type"] or []
+            if "point" not in current_types:
+                return get_geometry_by_quest_id(quest_id)
+            
+            current_types = [t for t in current_types if t != "point"]
+            
+            cur.execute(
+                """
+                UPDATE quest_geometries SET
+                    geometry_type = %(geometry_type)s,
+                    geometry_geojson = (
+                        SELECT jsonb_build_object(
+                            'type', 'FeatureCollection',
+                            'features', COALESCE(polygon_geojson->'features', '[]'::jsonb)
+                        )
+                        FROM quest_geometries WHERE quest_id = %(quest_id)s
+                    ),
+                    point_geojson = NULL,
+                    point_feature_count = 0,
+                    feature_count = COALESCE(
+                        (SELECT jsonb_array_length(polygon_geojson->'features') 
+                         FROM quest_geometries WHERE quest_id = %(quest_id)s), 0
+                    ),
+                    utm_zone = NULL,
+                    utm_band = NULL,
+                    utm_easting = NULL,
+                    utm_northing = NULL,
+                    updated_at = NOW()
+                WHERE quest_id = %(quest_id)s;
+                """,
+                {
+                    "quest_id": quest_id,
+                    "geometry_type": current_types if current_types else None,
+                },
+            )
+
+    return get_geometry_by_quest_id(quest_id)
+
+
+def remove_quest_polygon_geometry(quest_id: str) -> Optional[Dict]:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT geometry_type, point_geojson, polygon_geojson
+                FROM quest_geometries
+                WHERE quest_id = %(quest_id)s;
+                """,
+                {"quest_id": quest_id},
+            )
+            existing = cur.fetchone()
+            if existing is None:
+                return None
+            
+            current_types = existing["geometry_type"] or []
+            if "polygon" not in current_types:
+                return get_geometry_by_quest_id(quest_id)
+            
+            current_types = [t for t in current_types if t != "polygon"]
+            
+            cur.execute(
+                """
+                UPDATE quest_geometries SET
+                    geometry_type = %(geometry_type)s,
+                    geometry_geojson = (
+                        SELECT jsonb_build_object(
+                            'type', 'FeatureCollection',
+                            'features', COALESCE(point_geojson->'features', '[]'::jsonb)
+                        )
+                        FROM quest_geometries WHERE quest_id = %(quest_id)s
+                    ),
+                    polygon_geojson = NULL,
+                    polygon_feature_count = 0,
+                    feature_count = COALESCE(
+                        (SELECT jsonb_array_length(point_geojson->'features') 
+                         FROM quest_geometries WHERE quest_id = %(quest_id)s), 0
+                    ),
+                    source_path = NULL,
+                    source_name = NULL,
+                    upload_kind = NULL,
+                    updated_at = NOW()
+                WHERE quest_id = %(quest_id)s;
+                """,
+                {
+                    "quest_id": quest_id,
+                    "geometry_type": current_types if current_types else None,
+                },
+            )
+
+    return get_geometry_by_quest_id(quest_id)
+
+
 def move_geometry_to_finished(quest_id: str, accuracy_xy: float, accuracy_z: float) -> Optional[Dict]:
     with get_connection() as conn:
         with conn.cursor() as cur:

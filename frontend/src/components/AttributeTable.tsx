@@ -10,6 +10,8 @@ interface AttributeTableProps {
   onShowQuest?: (quest: Quest) => void;
   onUpdateQuest?: (quest: Quest) => Promise<void>;
   onAddGeometry?: (questId: string, file: File, type: 'points' | 'shp') => Promise<void>;
+  onDeleteGeometry?: (questId: string, type: 'point' | 'polygon') => Promise<void>;
+  onSavePointGeometry?: (questId: string, utm: string) => Promise<void>;
   onRefreshFinished?: () => Promise<unknown>;
   onViewModeChange?: (mode: 'all' | 'active' | 'finished') => void;
 }
@@ -101,6 +103,8 @@ export default function AttributeTable({
   onShowQuest,
   onUpdateQuest,
   onAddGeometry,
+  onDeleteGeometry,
+  onSavePointGeometry,
   onRefreshFinished,
   onViewModeChange,
 }: AttributeTableProps) {
@@ -122,7 +126,39 @@ export default function AttributeTable({
   const [isSaving, setIsSaving] = useState(false);
   const [uploadQuestId, setUploadQuestId] = useState<string | null>(null);
   const [uploadType, setUploadType] = useState<'points' | 'shp'>('points');
+  const [deletingGeometry, setDeletingGeometry] = useState<{ questId: string; type: 'point' | 'polygon' } | null>(null);
+  const [utmInputQuestId, setUtmInputQuestId] = useState<string | null>(null);
+  const [utmValue, setUtmValue] = useState('');
+  const [savingPoint, setSavingPoint] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const hasGeometryType = (types: Quest['geometry_type'], type: 'point' | 'polygon'): boolean => {
+    if (!types) return false;
+    if (Array.isArray(types)) return types.includes(type);
+    return types === type;
+  };
+
+  const handleDeleteGeometry = async (questId: string, type: 'point' | 'polygon') => {
+    if (!onDeleteGeometry || deletingGeometry) return;
+    setDeletingGeometry({ questId, type });
+    try {
+      await onDeleteGeometry(questId, type);
+    } finally {
+      setDeletingGeometry(null);
+    }
+  };
+
+  const handleSavePointUtm = async () => {
+    if (!utmInputQuestId || !utmValue.trim() || !onSavePointGeometry || savingPoint) return;
+    setSavingPoint(true);
+    try {
+      await onSavePointGeometry(utmInputQuestId, utmValue.trim());
+      setUtmInputQuestId(null);
+      setUtmValue('');
+    } finally {
+      setSavingPoint(false);
+    }
+  };
 
   const getCurrentColumns = (): typeof COLUMNS => {
     switch (viewMode) {
@@ -484,6 +520,44 @@ export default function AttributeTable({
         </div>
       )}
 
+      {utmInputQuestId && (
+        <div style={S.utmOverlay} onClick={() => { setUtmInputQuestId(null); setUtmValue(''); }}>
+          <div style={S.utmModal} onClick={(e) => e.stopPropagation()}>
+            <div style={S.utmTitle}>הזן קואורדינטות UTM</div>
+            <input
+              style={S.utmInput}
+              type="text"
+              placeholder="36R 712345 3512345"
+              value={utmValue}
+              onChange={(e) => setUtmValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && utmValue.trim()) {
+                  void handleSavePointUtm();
+                }
+              }}
+              autoFocus
+            />
+            <div style={S.utmButtons}>
+              <button
+                className="btn btn-ghost btn-sm"
+                type="button"
+                onClick={() => { setUtmInputQuestId(null); setUtmValue(''); }}
+              >
+                ביטול
+              </button>
+              <button
+                className="btn btn-primary btn-sm"
+                type="button"
+                onClick={() => void handleSavePointUtm()}
+                disabled={savingPoint || !utmValue.trim()}
+              >
+                {savingPoint ? 'שומר...' : 'שמור'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div style={S.infoBar}>
         <span style={S.infoItem}>נקודות: <strong>{filters.showPoints ? 'מוצג' : 'כבוי'}</strong></span>
         <span style={S.infoItem}>פוליגונים: <strong>{filters.showPolygons ? 'מוצג' : 'כבוי'}</strong></span>
@@ -583,24 +657,50 @@ export default function AttributeTable({
                       >
                         ✎
                       </button>
-                      {viewMode !== 'finished' && !quest.geometry_type && onAddGeometry && (
+                      {viewMode !== 'finished' && (
                         <>
-                          <button
-                            className="btn btn-ghost btn-sm"
-                            onClick={() => openFileUpload(quest.id, 'points')}
-                            type="button"
-                            title="הוסף נקודות"
-                          >
-                            📍
-                          </button>
-                          <button
-                            className="btn btn-ghost btn-sm"
-                            onClick={() => openFileUpload(quest.id, 'shp')}
-                            type="button"
-                            title="הוסף SHP"
-                          >
-                            📁
-                          </button>
+                          {hasGeometryType(quest.geometry_type, 'point') ? (
+                            <button
+                              className="btn btn-ghost btn-sm"
+                              onClick={() => handleDeleteGeometry(quest.id, 'point')}
+                              disabled={deletingGeometry?.questId === quest.id && deletingGeometry?.type === 'point'}
+                              type="button"
+                              title="מחק נקודה"
+                              style={{ color: 'var(--red)' }}
+                            >
+                              {deletingGeometry?.questId === quest.id && deletingGeometry?.type === 'point' ? '...' : '📍✕'}
+                            </button>
+                          ) : (
+                            <button
+                              className="btn btn-ghost btn-sm"
+                              onClick={() => setUtmInputQuestId(quest.id)}
+                              type="button"
+                              title="הוסף נקודה (UTM)"
+                            >
+                              📍
+                            </button>
+                          )}
+                          {hasGeometryType(quest.geometry_type, 'polygon') ? (
+                            <button
+                              className="btn btn-ghost btn-sm"
+                              onClick={() => handleDeleteGeometry(quest.id, 'polygon')}
+                              disabled={deletingGeometry?.questId === quest.id && deletingGeometry?.type === 'polygon'}
+                              type="button"
+                              title="מחק פוליגון"
+                              style={{ color: 'var(--red)' }}
+                            >
+                              {deletingGeometry?.questId === quest.id && deletingGeometry?.type === 'polygon' ? '...' : '🔷✕'}
+                            </button>
+                          ) : (
+                            <button
+                              className="btn btn-ghost btn-sm"
+                              onClick={() => openFileUpload(quest.id, 'shp')}
+                              type="button"
+                              title="הוסף SHP"
+                            >
+                              📁
+                            </button>
+                          )}
                         </>
                       )}
                     </div>
@@ -1052,5 +1152,48 @@ const S: Record<string, CSSProperties> = {
     background: 'var(--surface)',
     color: 'var(--text)',
     fontFamily: 'var(--font)',
+  },
+  utmOverlay: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    background: 'rgba(0,0,0,0.5)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000,
+  },
+  utmModal: {
+    background: 'var(--surface)',
+    padding: '20px 24px',
+    borderRadius: 12,
+    border: '1px solid var(--border)',
+    minWidth: 320,
+    boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+  },
+  utmTitle: {
+    fontSize: 14,
+    fontWeight: 600,
+    color: 'var(--text)',
+    marginBottom: 12,
+  },
+  utmInput: {
+    width: '100%',
+    fontSize: 13,
+    padding: '8px 12px',
+    borderRadius: 6,
+    border: '1px solid var(--border)',
+    background: 'var(--surface2)',
+    color: 'var(--text)',
+    fontFamily: 'var(--font)',
+    boxSizing: 'border-box',
+    marginBottom: 12,
+  },
+  utmButtons: {
+    display: 'flex',
+    justifyContent: 'flex-end',
+    gap: 8,
   },
 };

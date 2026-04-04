@@ -5,7 +5,7 @@ import MapView from '../components/MapView';
 import Navbar from '../components/Navbar';
 import QuestPanel from '../components/QuestPanel';
 import { useQuests } from '../hooks/useQuests';
-import { getFinishedGeometryCatalog, getGeometryCatalog, updateQuest, uploadQuestPointsGeometry, uploadQuestPolygonGeometry } from '../services/api';
+import { deleteQuestPointGeometry, deleteQuestPolygonGeometry, getFinishedGeometryCatalog, getGeometryCatalog, saveQuestPointGeometry, updateQuest, uploadQuestPointsGeometry, uploadQuestPolygonGeometry } from '../services/api';
 import { getFeaturePoint, getQuestGeometryBounds } from '../utils/geo';
 import type { GeometryCatalog, LayerFilters, LngLatPoint, MapBounds, Quest } from '../types/domain';
 
@@ -208,6 +208,22 @@ export default function HomePage() {
     await loadGeometryCatalog();
   }, [refresh, loadGeometryCatalog]);
 
+  const handleDeleteGeometry = useCallback(async (questId: string, type: 'point' | 'polygon') => {
+    if (type === 'point') {
+      await deleteQuestPointGeometry(questId);
+    } else {
+      await deleteQuestPolygonGeometry(questId);
+    }
+    await refresh();
+    await loadGeometryCatalog();
+  }, [refresh, loadGeometryCatalog]);
+
+  const handleSavePointGeometry = useCallback(async (questId: string, utm: string) => {
+    await saveQuestPointGeometry(questId, utm);
+    await refresh();
+    await loadGeometryCatalog();
+  }, [refresh, loadGeometryCatalog]);
+
   const onMouseDown = useCallback((event: MouseEvent<HTMLDivElement>) => {
     event.preventDefault();
     dragStartX.current = event.clientX;
@@ -298,6 +314,8 @@ export default function HomePage() {
                   onShowQuest={handleShowQuestOnMap}
                   onUpdateQuest={handleUpdateQuest}
                   onAddGeometry={handleAddGeometry}
+                  onDeleteGeometry={handleDeleteGeometry}
+                  onSavePointGeometry={handleSavePointGeometry}
                   onRefreshFinished={loadFinishedGeometryCatalog}
                   onViewModeChange={setTableViewMode}
                 />
