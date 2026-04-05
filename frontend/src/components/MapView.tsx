@@ -606,13 +606,13 @@ export default function MapView({
           <div style={S.contextHeader}>UTM Coord</div>
           <div style={S.contextPreview}>{formatUTM(contextMenu.point)}</div>
           <button style={{ ...S.contextButton, ...S.contextPrimary }} onClick={() => void copyText('UTM', formatUTM(contextMenu.point))}>Copy UTM</button>
+          <button style={S.contextButton} onClick={handleIdentify}>Identify Features</button>
+          <div style={S.divider} />
           <div style={S.contextSectionTitle}>Copy GEO Coord</div>
           <button style={S.contextButton} onClick={() => void copyText('DD', formatDD(contextMenu.point))}>Copy DD</button>
           <button style={S.contextButton} onClick={() => void copyText('D', formatD(contextMenu.point))}>Copy D</button>
           <button style={S.contextButton} onClick={() => void copyText('DMS', formatDMS(contextMenu.point))}>Copy DMS</button>
           <button style={S.contextButton} onClick={() => void copyText('All formats', formatAllCoordinateTypes(contextMenu.point))}>Copy Full Coord Set</button>
-          <div style={S.divider} />
-          <button style={S.contextButton} onClick={handleIdentify}>Identify Features</button>
           {contextMenu.copied && <div style={S.contextStatus}>Copied: {contextMenu.copied}</div>}
         </div>
       )}

@@ -36,7 +36,7 @@ export default function Navbar({ onTogglePanel, panelOpen }: NavbarProps) {
 
       {/* Center status */}
       <div style={S.center}>
-        <div style={S.pill}>🛰 מצב לייב</div>
+        <div style={S.pill}>🛰 חוליית לווינות</div>
       </div>
 
       {/* Right side */}

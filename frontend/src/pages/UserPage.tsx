@@ -12,6 +12,7 @@ import ThemeToggle from '../components/ThemeToggle';
 import { useAuth } from '../context/AuthContext';
 import { createUser, deleteUser, getQuests, getUsers, updateUser as updateUserApi } from '../services/api';
 import type { Quest, User, UserCreateInput, UserRole, UserUpdateInput } from '../types/domain';
+import { USER_CREATE_FIELDS, USER_EDIT_FIELDS } from '../config/userFields';
 
 const ROLE_LABELS: Record<UserRole, string> = {
   'Team Leader': 'מנהל צוות',
@@ -347,35 +348,27 @@ export default function UserPage() {
             <form style={S.formCard} onSubmit={(event) => void handleCreateUser(event)}>
               <div style={S.cardTitle}>הוספת משתמש חדש</div>
               <div style={S.formGrid}>
-                <input
-                  value={createForm.display_name || ''}
-                  onChange={(event) => setCreateForm((current) => ({ ...current, display_name: event.target.value }))}
-                  placeholder="שם מלא"
-                />
-                <input
-                  value={createForm.username}
-                  onChange={(event) => setCreateForm((current) => ({ ...current, username: event.target.value }))}
-                  placeholder="שם משתמש"
-                />
-                <input
-                  value={createForm.password}
-                  onChange={(event) => setCreateForm((current) => ({ ...current, password: event.target.value }))}
-                  placeholder="סיסמה"
-                  type="password"
-                />
-                <input
-                  value={createForm.group || ''}
-                  onChange={(event) => setCreateForm((current) => ({ ...current, group: event.target.value }))}
-                  placeholder="קבוצה"
-                />
-                <select
-                  value={createForm.role}
-                  onChange={(event) => setCreateForm((current) => ({ ...current, role: event.target.value as UserRole }))}
-                >
-                  {ROLE_OPTIONS.map((role) => (
-                    <option key={role} value={role}>{ROLE_LABELS[role]}</option>
-                  ))}
-                </select>
+                {USER_CREATE_FIELDS.map((field) => (
+                  field.type === 'select' && field.key === 'role' ? (
+                    <select
+                      key={field.key}
+                      value={createForm.role}
+                      onChange={(event) => setCreateForm((current) => ({ ...current, role: event.target.value as UserRole }))}
+                    >
+                      {ROLE_OPTIONS.map((role) => (
+                        <option key={role} value={role}>{ROLE_LABELS[role]}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      key={field.key}
+                      value={String(createForm[field.key] ?? '')}
+                      onChange={(event) => setCreateForm((current) => ({ ...current, [field.key]: event.target.value }))}
+                      placeholder={field.placeholder || field.label}
+                      type={field.type}
+                    />
+                  )
+                ))}
               </div>
               <div style={S.formActions}>
                 <button className="btn btn-primary" type="submit" disabled={creating}>
@@ -405,30 +398,27 @@ export default function UserPage() {
                     </div>
 
                     <div style={S.formGrid}>
-                      <input
-                        value={draft.display_name}
-                        onChange={(event) => updateAdminField(String(entry.id), 'display_name', event.target.value)}
-                        placeholder="שם מלא"
-                      />
-                      <input
-                        value={draft.group}
-                        onChange={(event) => updateAdminField(String(entry.id), 'group', event.target.value)}
-                        placeholder="קבוצה"
-                      />
-                      <select
-                        value={draft.role}
-                        onChange={(event) => updateAdminField(String(entry.id), 'role', event.target.value)}
-                      >
-                        {ROLE_OPTIONS.map((role) => (
-                          <option key={role} value={role}>{ROLE_LABELS[role]}</option>
-                        ))}
-                      </select>
-                      <input
-                        value={draft.password}
-                        onChange={(event) => updateAdminField(String(entry.id), 'password', event.target.value)}
-                        placeholder="סיסמה חדשה (אופציונלי)"
-                        type="password"
-                      />
+                      {USER_EDIT_FIELDS.map((field) => (
+                        field.type === 'select' && field.key === 'role' ? (
+                          <select
+                            key={field.key}
+                            value={draft.role}
+                            onChange={(event) => updateAdminField(String(entry.id), 'role', event.target.value)}
+                          >
+                            {ROLE_OPTIONS.map((role) => (
+                              <option key={role} value={role}>{ROLE_LABELS[role]}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <input
+                            key={field.key}
+                            value={String(draft[field.key as keyof UserEditState] ?? '')}
+                            onChange={(event) => updateAdminField(String(entry.id), field.key as keyof UserEditState, event.target.value)}
+                            placeholder={field.placeholder || field.label}
+                            type={field.type}
+                          />
+                        )
+                      ))}
                     </div>
 
                     <div style={S.formActions}>

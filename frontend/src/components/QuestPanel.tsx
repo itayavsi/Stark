@@ -563,14 +563,13 @@ export default function QuestPanel({
               {newQuestCount > 0 && <span style={S.bellCount}>{newQuestCount}</span>}
             </button>
             <button className="btn btn-ghost btn-sm" onClick={() => setShowJump((current) => !current)} title="קפיצה לנקודה">
-              {showJump ? '✕ סגור' : '📍 קפוץ'}
+              {showJump ? '✕ סגור' : '📍'}
             </button>
             {isLeader && (
               <button className="btn btn-primary btn-sm" onClick={() => setShowNew(v => !v)}>
                 {showNew ? '✕' : '+ חדש'}
               </button>
             )}
-            <button className="btn btn-ghost btn-sm" onClick={onRefresh} title="רענן">↻</button>
             <button className="btn btn-ghost btn-sm" onClick={() => setFullscreen(true)} title="מסך מלא">⛶</button>
           </div>
         </div>
@@ -583,9 +582,6 @@ export default function QuestPanel({
             <textarea className="input" placeholder="תיאור (אופציונלי)" value={newDesc}
               onChange={e => setNewDesc(e.target.value)} rows={2} style={{ resize: 'vertical', fontSize: 13 }} />
             <div style={{ display: 'flex', gap: 6 }}>
-              <select className="input" value={newYear} onChange={e => setNewYear(Number(e.target.value))} style={{ fontSize: 13, flex: 1 }}>
-                {[2026, 2025, 2024, 2023].map(y => <option key={y} value={y}>{y}</option>)}
-              </select>
               <select className="input" value={newFt} onChange={e => setNewFt(e.target.value as FtOption)} style={{ fontSize: 13, flex: 1 }}>
                 {FT_OPTIONS.map(ft => <option key={ft} value={ft}>{ft}</option>)}
               </select>
