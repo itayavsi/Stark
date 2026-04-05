@@ -1,6 +1,13 @@
 import { useMemo, useState, useRef, useEffect, type CSSProperties } from 'react';
 
 import type { LayerFilters, Quest, QuestPriority, QuestStatus } from '../types/domain';
+import {
+  ATTRIBUTE_TABLE_DEFAULT_COL_WIDTHS,
+  ATTRIBUTE_TABLE_SQL_FIELDS,
+  getAttributeTableColumns,
+  type AttributeColumnKey,
+  type AttributeColumn,
+} from '../config/questTableColumns';
 
 interface AttributeTableProps {
   quests: Quest[];
@@ -26,78 +33,9 @@ interface SqlFilter {
 
 type ViewMode = 'all' | 'active' | 'finished';
 
-const COLUMNS: Array<{ key: keyof Quest | 'geometry_summary' | 'accuracy_xy' | 'accuracy_z'; label: string; editable?: boolean }> = [
-  { key: 'title', label: 'כותרת', editable: true },
-  { key: 'quest_type', label: 'סוג משימה' },
-  { key: 'status', label: 'סטטוס', editable: true },
-  { key: 'priority', label: 'תעדוף', editable: true },
-  { key: 'group', label: 'קבוצה', editable: true },
-  { key: 'year', label: 'שנה', editable: true },
-  { key: 'assigned_user', label: 'משויך', editable: true },
-  { key: 'date', label: 'תאריך', editable: true },
-  { key: 'notes', label: 'הערות', editable: true },
-  { key: 'model_folder', label: 'Model Folder' },
-  { key: 'geometry_type', label: 'סוג גיאומטריה' },
-  { key: 'geometry_status', label: 'סטטוס גיאומטריה' },
-  { key: 'geometry_summary', label: 'מקור / מידע' },
-];
-
-const FINISHED_COLUMNS: Array<{ key: keyof Quest | 'geometry_summary' | 'accuracy_xy' | 'accuracy_z'; label: string; editable?: boolean }> = [
-  { key: 'title', label: 'כותרת', editable: true },
-  { key: 'quest_type', label: 'סוג משימה', editable: true },
-  { key: 'status', label: 'סטטוס', editable: true },
-  { key: 'priority', label: 'תעדוף', editable: true },
-  { key: 'group', label: 'קבוצה', editable: true },
-  { key: 'year', label: 'שנה', editable: true },
-  { key: 'assigned_user', label: 'משויך', editable: true },
-  { key: 'date', label: 'תאריך', editable: true },
-  { key: 'notes', label: 'הערות', editable: true },
-  { key: 'model_folder', label: 'Model Folder' },
-  { key: 'geometry_type', label: 'סוג גיאומטריה' },
-  { key: 'accuracy_xy', label: 'דיוק XY (ס"מ)' },
-  { key: 'accuracy_z', label: 'דיוק Z (ס"מ)' },
-  { key: 'geometry_summary', label: 'מקור / מידע' },
-];
-
-const ALL_COLUMNS: Array<{ key: keyof Quest | 'geometry_summary' | 'accuracy_xy' | 'accuracy_z'; label: string; editable?: boolean }> = [
-  { key: 'title', label: 'כותרת', editable: true },
-  { key: 'quest_type', label: 'סוג משימה', editable: true },
-  { key: 'status', label: 'סטטוס', editable: true },
-  { key: 'priority', label: 'תעדוף', editable: true },
-  { key: 'group', label: 'קבוצה', editable: true },
-  { key: 'year', label: 'שנה', editable: true },
-  { key: 'assigned_user', label: 'משויך', editable: true },
-  { key: 'date', label: 'תאריך', editable: true },
-  { key: 'notes', label: 'הערות', editable: true },
-  { key: 'model_folder', label: 'Model Folder' },
-  { key: 'geometry_type', label: 'סוג גיאומטריה' },
-  { key: 'geometry_status', label: 'סטטוס גיאומטריה' },
-  { key: 'accuracy_xy', label: 'דיוק XY (ס"מ)' },
-  { key: 'accuracy_z', label: 'דיוק Z (ס"מ)' },
-  { key: 'geometry_summary', label: 'מקור / מידע' },
-];
 
 const STATUS_OPTIONS: QuestStatus[] = ['Open', 'Taken', 'In Progress', 'Done', 'Approved', 'Stopped', 'Cancelled', 'ממתין'];
 const PRIORITY_OPTIONS: QuestPriority[] = ['גבוה', 'רגיל', 'נמוך'];
-
-const DEFAULT_COL_WIDTHS: Record<string, number> = {
-  actions: 140,
-  title: 200,
-  quest_type: 100,
-  status: 100,
-  priority: 80,
-  group: 100,
-  year: 70,
-  assigned_user: 120,
-  date: 100,
-  notes: 200,
-  model_folder: 160,
-  geometry_type: 100,
-  geometry_status: 100,
-  geometry_summary: 150,
-  accuracy_xy: 100,
-  accuracy_z: 100,
-};
 
 export default function AttributeTable({
   quests,
@@ -175,16 +113,7 @@ export default function AttributeTable({
     modelFolderInputRef.current.setAttribute('directory', '');
   }, []);
 
-  const getCurrentColumns = (): typeof COLUMNS => {
-    switch (viewMode) {
-      case 'finished':
-        return FINISHED_COLUMNS;
-      case 'active':
-        return COLUMNS;
-      default:
-        return ALL_COLUMNS;
-    }
-  };
+  const getCurrentColumns = (): AttributeColumn[] => getAttributeTableColumns(viewMode);
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -214,7 +143,7 @@ export default function AttributeTable({
   const startResize = (e: React.MouseEvent, key: string) => {
     e.preventDefault();
     e.stopPropagation();
-    const width = columnWidths[key] || DEFAULT_COL_WIDTHS[key] || 100;
+    const width = columnWidths[key] || ATTRIBUTE_TABLE_DEFAULT_COL_WIDTHS[key] || 100;
     const state = { key, startX: e.clientX, startWidth: width };
     setResizing(state);
     resizingRef.current = state;
@@ -222,7 +151,8 @@ export default function AttributeTable({
     document.body.style.userSelect = 'none';
   };
 
-  const getColumnWidth = (key: string) => columnWidths[key] || DEFAULT_COL_WIDTHS[key] || undefined;
+  const getColumnWidth = (key: string) =>
+    columnWidths[key] || ATTRIBUTE_TABLE_DEFAULT_COL_WIDTHS[key] || undefined;
 
   const currentColumns = getCurrentColumns();
   const currentQuests = viewMode === 'finished' ? finishedQuests : viewMode === 'active' ? quests : [...quests, ...finishedQuests];
@@ -546,7 +476,7 @@ export default function AttributeTable({
               onChange={(e) => setActiveSqlFilter({ field: e.target.value as keyof Quest, operator: '=', value: '' })}
             >
               <option value="">שדה...</option>
-              {COLUMNS.filter(col => col.key !== 'geometry_summary').map((col) => (
+              {ATTRIBUTE_TABLE_SQL_FIELDS.map((col) => (
                 <option key={col.key} value={col.key}>{col.label}</option>
               ))}
             </select>
@@ -897,7 +827,7 @@ function EditableCell({
   );
 }
 
-function getColumnValue(quest: Quest, key: keyof Quest | 'geometry_summary' | 'accuracy_xy' | 'accuracy_z'): string | number {
+function getColumnValue(quest: Quest, key: AttributeColumnKey): string | number {
   if (key === 'geometry_summary') {
     return quest.geometry_source_name || quest.geometry_source_path || '—';
   }

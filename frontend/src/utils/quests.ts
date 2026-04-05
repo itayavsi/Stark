@@ -1,4 +1,5 @@
 import type { Quest, QuestStatus } from '../types/domain';
+import { ALL_QUEST_COLUMNS, QUEST_PANEL_SORT_KEY_BY_COLUMN } from '../config/questTableColumns';
 
 interface QuestView {
   id: 'open' | 'done' | 'stopped' | 'more';
@@ -38,18 +39,9 @@ export function isMoreQuest(quest: Quest): boolean {
   return Boolean(quest.isNew) || quest.status === 'ממתין' || isLowPriorityQuest(quest);
 }
 
-export const ALL_QUEST_COLUMNS = ['#', 'כותרת', 'FT', 'סטטוס', 'תאריך', 'משתמש', 'תיאור', 'שנה'] as const;
+export { ALL_QUEST_COLUMNS };
 
-const SORT_KEY_BY_COLUMN: Record<(typeof ALL_QUEST_COLUMNS)[number], keyof Quest | 'id'> = {
-  '#': 'id',
-  'כותרת': 'title',
-  FT: 'ft',
-  'סטטוס': 'status',
-  'תאריך': 'date',
-  'משתמש': 'assigned_user',
-  'תיאור': 'description',
-  'שנה': 'year',
-};
+const SORT_KEY_BY_COLUMN = QUEST_PANEL_SORT_KEY_BY_COLUMN;
 
 export interface QuestSortOption {
   id: 'manual' | 'ft' | 'date' | 'assigned_user';
