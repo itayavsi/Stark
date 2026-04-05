@@ -48,6 +48,7 @@ def _build_local_quest_payload(data: dict, default_matziah: str = "H") -> dict:
         "date": data.get("date") or today,
         "assigned_user": data.get("assigned_user"),
         "shapefile_path": data.get("shapefile_path"),
+        "model_folder": data.get("model_folder"),
         "group": data.get("group", "לווינות"),
         "year": data.get("year", datetime.now().year),
         "ft": quest_type,
@@ -239,7 +240,7 @@ def update_quest_priority(quest_id: str, priority: str):
 
 
 def update_quest_fields(quest_id: str, fields: dict):
-    allowed_fields = {"title", "status", "priority", "assigned_user", "group", "year", "date", "notes"}
+    allowed_fields = {"title", "status", "priority", "assigned_user", "group", "year", "date", "notes", "model_folder"}
     update_data = {k: v for k, v in fields.items() if k in allowed_fields}
     if not update_data:
         return None

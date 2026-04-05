@@ -36,6 +36,7 @@ const COLUMNS: Array<{ key: keyof Quest | 'geometry_summary' | 'accuracy_xy' | '
   { key: 'assigned_user', label: 'משויך', editable: true },
   { key: 'date', label: 'תאריך', editable: true },
   { key: 'notes', label: 'הערות', editable: true },
+  { key: 'model_folder', label: 'Model Folder' },
   { key: 'geometry_type', label: 'סוג גיאומטריה' },
   { key: 'geometry_status', label: 'סטטוס גיאומטריה' },
   { key: 'geometry_summary', label: 'מקור / מידע' },
@@ -51,6 +52,7 @@ const FINISHED_COLUMNS: Array<{ key: keyof Quest | 'geometry_summary' | 'accurac
   { key: 'assigned_user', label: 'משויך', editable: true },
   { key: 'date', label: 'תאריך', editable: true },
   { key: 'notes', label: 'הערות', editable: true },
+  { key: 'model_folder', label: 'Model Folder' },
   { key: 'geometry_type', label: 'סוג גיאומטריה' },
   { key: 'accuracy_xy', label: 'דיוק XY (ס"מ)' },
   { key: 'accuracy_z', label: 'דיוק Z (ס"מ)' },
@@ -67,6 +69,7 @@ const ALL_COLUMNS: Array<{ key: keyof Quest | 'geometry_summary' | 'accuracy_xy'
   { key: 'assigned_user', label: 'משויך', editable: true },
   { key: 'date', label: 'תאריך', editable: true },
   { key: 'notes', label: 'הערות', editable: true },
+  { key: 'model_folder', label: 'Model Folder' },
   { key: 'geometry_type', label: 'סוג גיאומטריה' },
   { key: 'geometry_status', label: 'סטטוס גיאומטריה' },
   { key: 'accuracy_xy', label: 'דיוק XY (ס"מ)' },
@@ -88,6 +91,7 @@ const DEFAULT_COL_WIDTHS: Record<string, number> = {
   assigned_user: 120,
   date: 100,
   notes: 200,
+  model_folder: 160,
   geometry_type: 100,
   geometry_status: 100,
   geometry_summary: 150,
@@ -130,7 +134,10 @@ export default function AttributeTable({
   const [utmInputQuestId, setUtmInputQuestId] = useState<string | null>(null);
   const [utmValue, setUtmValue] = useState('');
   const [savingPoint, setSavingPoint] = useState(false);
+  const [modelFolderQuestId, setModelFolderQuestId] = useState<string | null>(null);
+  const [savingModelFolderId, setSavingModelFolderId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const modelFolderInputRef = useRef<HTMLInputElement>(null);
 
   const hasGeometryType = (types: Quest['geometry_type'], type: 'point' | 'polygon'): boolean => {
     if (!types) return false;
@@ -159,6 +166,14 @@ export default function AttributeTable({
       setSavingPoint(false);
     }
   };
+
+  useEffect(() => {
+    if (!modelFolderInputRef.current) {
+      return;
+    }
+    modelFolderInputRef.current.setAttribute('webkitdirectory', '');
+    modelFolderInputRef.current.setAttribute('directory', '');
+  }, []);
 
   const getCurrentColumns = (): typeof COLUMNS => {
     switch (viewMode) {
@@ -330,6 +345,46 @@ export default function AttributeTable({
     fileInputRef.current?.click();
   };
 
+  const openModelFolderPicker = (questId: string) => {
+    if (!onUpdateQuest) return;
+    setModelFolderQuestId(questId);
+    modelFolderInputRef.current?.click();
+  };
+
+  const handleModelFolderChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    if (!files.length || !modelFolderQuestId || !onUpdateQuest) {
+      return;
+    }
+
+    const first = files[0] as File & { webkitRelativePath?: string };
+    const relativePath = first.webkitRelativePath || first.name;
+    const folderName = relativePath.split('/')[0] || relativePath;
+    const quest = currentQuests.find((q) => q.id === modelFolderQuestId);
+    if (!quest || !folderName) {
+      return;
+    }
+
+    setSavingModelFolderId(modelFolderQuestId);
+    try {
+      await onUpdateQuest({ ...quest, model_folder: folderName });
+    } finally {
+      setSavingModelFolderId(null);
+      setModelFolderQuestId(null);
+      event.target.value = '';
+    }
+  };
+
+  const handleClearModelFolder = async (quest: Quest) => {
+    if (!onUpdateQuest) return;
+    setSavingModelFolderId(quest.id);
+    try {
+      await onUpdateQuest({ ...quest, model_folder: null });
+    } finally {
+      setSavingModelFolderId(null);
+    }
+  };
+
   const addSqlFilter = () => {
     if (activeSqlFilter) {
       setSqlFilters((prev) => [...prev, activeSqlFilter]);
@@ -379,6 +434,13 @@ export default function AttributeTable({
         style={{ display: 'none' }}
         accept={uploadType === 'shp' ? '.zip,.shp' : '.csv,.json,.geojson'}
         onChange={handleFileUpload}
+      />
+      <input
+        type="file"
+        ref={modelFolderInputRef}
+        style={{ display: 'none' }}
+        multiple
+        onChange={handleModelFolderChange}
       />
 
       <div style={S.header}>
@@ -712,7 +774,34 @@ export default function AttributeTable({
                     style={{ ...S.td, width: getColumnWidth(column.key) }}
                     title={String(getColumnValue(quest, column.key as keyof Quest | 'geometry_summary' | 'accuracy_xy' | 'accuracy_z'))}
                   >
-                    {editingRowId === quest.id && column.editable ? (
+                    {column.key === 'model_folder' ? (
+                      <div style={S.modelFolderCell}>
+                        <span style={S.modelFolderText}>{quest.model_folder || '—'}</span>
+                        <div style={S.modelFolderActions}>
+                          <button
+                            className="btn btn-ghost btn-sm"
+                            type="button"
+                            onClick={() => openModelFolderPicker(quest.id)}
+                            disabled={!onUpdateQuest || savingModelFolderId === quest.id}
+                            title={quest.model_folder ? 'ערוך תיקייה' : 'הוסף תיקייה'}
+                          >
+                            {savingModelFolderId === quest.id ? '...' : quest.model_folder ? '✎ ערוך' : '+ הוסף'}
+                          </button>
+                          {quest.model_folder && (
+                            <button
+                              className="btn btn-ghost btn-sm"
+                              type="button"
+                              onClick={() => handleClearModelFolder(quest)}
+                              disabled={!onUpdateQuest || savingModelFolderId === quest.id}
+                              style={{ color: 'var(--red)' }}
+                              title="הסר תיקייה"
+                            >
+                              {savingModelFolderId === quest.id ? '...' : '🗑'}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ) : editingRowId === quest.id && column.editable ? (
                       <EditableCell
                         field={column.key as EditableField}
                         value={Array.isArray(editedQuest?.[column.key as keyof Quest]) 
@@ -1108,6 +1197,24 @@ const S: Record<string, CSSProperties> = {
     whiteSpace: 'nowrap',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
+  },
+  modelFolderCell: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 6,
+    width: '100%',
+  },
+  modelFolderText: {
+    flex: 1,
+    minWidth: 0,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+  modelFolderActions: {
+    display: 'flex',
+    gap: 4,
+    flexShrink: 0,
   },
   tdActions: {
     fontSize: 12,

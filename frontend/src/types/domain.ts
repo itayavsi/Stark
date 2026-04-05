@@ -58,6 +58,7 @@ export interface Quest {
   lng?: number;
   lat?: number;
   shapefile_path?: string;
+  model_folder?: string | null;
   matziah?: MatziahOption | string;
   sync_external_id?: string;
   sync_source?: string;
@@ -92,6 +93,7 @@ export interface CreateQuestInput {
   quest_type?: FtOption | string;
   group?: string;
   shapefile_path?: string;
+  model_folder?: string | null;
   matziah?: MatziahOption | string;
   sync_external_id?: string;
   sync_source?: string;

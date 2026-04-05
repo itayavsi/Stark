@@ -211,8 +211,8 @@ export default function HomePage() {
   }, []);
 
   const handleUpdateQuest = useCallback(async (quest: Quest) => {
-    const { id, title, status, priority, assigned_user, group, year, date, notes } = quest;
-    await updateQuest(id, { title, status, priority, assigned_user, group, year, date, notes });
+    const { id, title, status, priority, assigned_user, group, year, date, notes, model_folder } = quest;
+    await updateQuest(id, { title, status, priority, assigned_user, group, year, date, notes, model_folder });
     await refresh();
     await loadGeometryCatalog();
   }, [refresh, loadGeometryCatalog]);

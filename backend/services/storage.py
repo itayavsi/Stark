@@ -30,6 +30,7 @@ def _normalize_quest(row: Dict) -> Dict:
         "date": row["date"],
         "assigned_user": row["assigned_user"],
         "shapefile_path": row["shapefile_path"],
+        "model_folder": row.get("model_folder"),
         "group": row["group_name"],
         "year": row["year"],
         "ft": row["ft"],
@@ -67,6 +68,7 @@ def _quest_columns(table_alias: str = "q") -> str:
         {prefix}date,
         {prefix}assigned_user,
         {prefix}shapefile_path,
+        {prefix}model_folder,
         {prefix}group_name,
         {prefix}year,
         {prefix}ft,
@@ -271,13 +273,13 @@ def save_quest(quest: Dict):
                 f"""
                 INSERT INTO {target_table} (
                     id, title, description, status, "תעדוף", date, assigned_user,
-                    shapefile_path, group_name, year, ft, "מצייח",
+                    shapefile_path, model_folder, group_name, year, ft, "מצייח",
                     sync_external_id, sync_source, sync_name,
                     geometry_status, geometry_source_path, geometry_feature_count, geometry_updated_at
                 )
                 VALUES (
                     %(id)s, %(title)s, %(description)s, %(status)s, %(priority)s, %(date)s, %(assigned_user)s,
-                    %(shapefile_path)s, %(group_name)s, %(year)s, %(ft)s, %(matziah)s,
+                    %(shapefile_path)s, %(model_folder)s, %(group_name)s, %(year)s, %(ft)s, %(matziah)s,
                     %(sync_external_id)s, %(sync_source)s, %(sync_name)s,
                     %(geometry_status)s, %(geometry_source_path)s, %(geometry_feature_count)s, NOW()
                 );
@@ -291,6 +293,7 @@ def save_quest(quest: Dict):
                     "date": quest["date"],
                     "assigned_user": quest["assigned_user"],
                     "shapefile_path": quest["shapefile_path"],
+                    "model_folder": quest.get("model_folder"),
                     "group_name": quest["group"],
                     "year": quest["year"],
                     "ft": quest["ft"],
@@ -318,6 +321,7 @@ def update_quest(quest_id: str, updates: Dict) -> Optional[Dict]:
         "date": "date",
         "assigned_user": "assigned_user",
         "shapefile_path": "shapefile_path",
+        "model_folder": "model_folder",
         "group": "group_name",
         "year": "year",
         "ft": "ft",
@@ -399,6 +403,7 @@ def move_quest(quest_id: str, destination_table: str, updates: Optional[Dict] = 
         "date": "date",
         "assigned_user": "assigned_user",
         "shapefile_path": "shapefile_path",
+        "model_folder": "model_folder",
         "group": "group_name",
         "year": "year",
         "ft": "ft",
@@ -447,6 +452,7 @@ def move_quest(quest_id: str, destination_table: str, updates: Optional[Dict] = 
                     date,
                     assigned_user,
                     shapefile_path,
+                    model_folder,
                     group_name,
                     year,
                     ft,
@@ -488,6 +494,7 @@ def move_quest(quest_id: str, destination_table: str, updates: Optional[Dict] = 
                 "date": row["date"],
                 "assigned_user": row["assigned_user"],
                 "shapefile_path": row["shapefile_path"],
+                "model_folder": row.get("model_folder"),
                 "group": row["group_name"],
                 "year": row["year"],
                 "ft": row["ft"],
@@ -532,6 +539,7 @@ def move_quest(quest_id: str, destination_table: str, updates: Optional[Dict] = 
                 ("date", "date"),
                 ("assigned_user", "assigned_user"),
                 ("shapefile_path", "shapefile_path"),
+                ("model_folder", "model_folder"),
                 ("group_name", "group"),
                 ("year", "year"),
                 ("ft", "ft"),

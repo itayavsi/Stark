@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ChangeEvent, type CSSProperties, type MouseEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type ChangeEvent, type CSSProperties, type MouseEvent } from 'react';
 import {
   completeQuestWithAccuracy,
   setQuestPriority,
@@ -46,7 +46,9 @@ export default function QuestItem({
   const [showAccuracyModal, setShowAccuracyModal] = useState(false);
   const [editingNotes, setEditingNotes] = useState(false);
   const [notesValue, setNotesValue] = useState('');
+  const [savingModelFolder, setSavingModelFolder] = useState(false);
   const clearMessageTimeout = useRef<number | null>(null);
+  const modelFolderInputRef = useRef<HTMLInputElement | null>(null);
 
   const role = user?.role || 'Viewer';
   const isViewer = role === 'Viewer';
@@ -78,6 +80,15 @@ export default function QuestItem({
         window.clearTimeout(clearMessageTimeout.current);
       }
     };
+  }, []);
+
+  const setModelFolderInput = useCallback((node: HTMLInputElement | null) => {
+    modelFolderInputRef.current = node;
+    if (!node) {
+      return;
+    }
+    node.setAttribute('webkitdirectory', '');
+    node.setAttribute('directory', '');
   }, []);
 
   const showMsg = (text: string, type: MessageType = 'info') => {
@@ -207,6 +218,95 @@ export default function QuestItem({
     setBusy(false);
   };
 
+  const openModelFolderPicker = (e: MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    if (savingModelFolder) return;
+    modelFolderInputRef.current?.click();
+  };
+
+  const handleModelFolderFiles = async (event: ChangeEvent<HTMLInputElement>) => {
+    event.stopPropagation();
+    const files = Array.from(event.target.files || []);
+    if (!files.length || savingModelFolder) {
+      return;
+    }
+
+    const first = files[0] as File & { webkitRelativePath?: string; path?: string };
+    const relativePath = first.webkitRelativePath || first.name;
+    const folderName = relativePath.split('/')[0] || relativePath;
+    let modelFolderValue = folderName;
+
+    if (first.path && relativePath) {
+      const normalizedFilePath = first.path.replace(/\\/g, '/');
+      const normalizedRelative = relativePath.replace(/\\/g, '/');
+      if (normalizedFilePath.endsWith(normalizedRelative)) {
+        const root = normalizedFilePath.slice(0, -normalizedRelative.length).replace(/\/$/, '');
+        if (root) {
+          modelFolderValue = `${root}/${folderName}`;
+        }
+      }
+    }
+
+    setSavingModelFolder(true);
+    showMsg('⏳ מעדכן תיקייה...', 'info');
+    try {
+      await updateQuest(quest.id, { model_folder: modelFolderValue });
+      await onRefresh();
+      showMsg('✓ תיקיית מודל עודכנה', 'success');
+    } catch {
+      showMsg('✗ שגיאה בעדכון תיקיית מודל', 'error');
+    } finally {
+      setSavingModelFolder(false);
+      event.target.value = '';
+    }
+  };
+
+  const handleClearModelFolder = async (e: MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    if (savingModelFolder) return;
+    setSavingModelFolder(true);
+    showMsg('⏳ מסיר תיקייה...', 'info');
+    try {
+      await updateQuest(quest.id, { model_folder: null });
+      await onRefresh();
+      showMsg('✓ תיקיית מודל הוסרה', 'success');
+    } catch {
+      showMsg('✗ שגיאה בהסרת תיקיית מודל', 'error');
+    } finally {
+      setSavingModelFolder(false);
+    }
+  };
+
+  const handleOpenModelFolder = (e: MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+    const raw = quest.model_folder?.trim();
+    if (!raw) {
+      showMsg('אין תיקייה לפתיחה', 'warning');
+      return;
+    }
+
+    const normalized = raw.replace(/\\/g, '/');
+    let fileUrl: string | null = null;
+    if (normalized.startsWith('file://')) {
+      fileUrl = normalized;
+    } else if (/^[a-zA-Z]:\//.test(normalized)) {
+      fileUrl = `file:///${normalized}`;
+    } else if (normalized.startsWith('/')) {
+      fileUrl = `file://${normalized}`;
+    }
+
+    if (!fileUrl) {
+      showMsg('הנתיב אינו מלא — בחר תיקייה להעלאה', 'warning');
+      modelFolderInputRef.current?.click();
+      return;
+    }
+
+    const opened = window.open(fileUrl, '_blank');
+    if (!opened) {
+      showMsg('חסימת חלונות קופצים מנעה פתיחה', 'warning');
+    }
+  };
+
   const msgColor: Record<MessageType, string> = { success:'var(--green)', error:'var(--red)', warning:'var(--orange)', info:'var(--accent)' };
 
   return (
@@ -239,6 +339,13 @@ export default function QuestItem({
       {/* ── Expanded ───────────────────────────────────── */}
       {expanded && (
         <div style={S.expanded} onClick={e => e.stopPropagation()}>
+          <input
+            ref={setModelFolderInput}
+            type="file"
+            multiple
+            style={{ display: 'none' }}
+            onChange={(event) => void handleModelFolderFiles(event)}
+          />
 
           {quest.description && <p style={S.desc}>{quest.description}</p>}
           
@@ -348,6 +455,49 @@ export default function QuestItem({
               </button>
             )}
 
+          </div>
+
+          {/* Model folder */}
+          <div style={S.modelFolder}>
+            <div style={S.modelFolderHeader}>
+              <span style={S.modelFolderLabel}>Model Folder</span>
+              <div style={S.modelFolderActions}>
+                {quest.model_folder && (
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={handleOpenModelFolder}
+                    type="button"
+                    title="פתח תיקייה"
+                  >
+                    📂 פתח
+                  </button>
+                )}
+                {!isViewer && (
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={openModelFolderPicker}
+                    disabled={savingModelFolder}
+                    type="button"
+                    title={quest.model_folder ? 'ערוך תיקייה' : 'הוסף תיקייה'}
+                  >
+                    {savingModelFolder ? '...' : quest.model_folder ? '✎ ערוך' : '+ הוסף'}
+                  </button>
+                )}
+                {!isViewer && quest.model_folder && (
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    onClick={handleClearModelFolder}
+                    disabled={savingModelFolder}
+                    type="button"
+                    style={{ color: 'var(--red)' }}
+                    title="הסר תיקייה"
+                  >
+                    {savingModelFolder ? '...' : '🗑'}
+                  </button>
+                )}
+              </div>
+            </div>
+            <div style={S.modelFolderPath}>{quest.model_folder || '—'}</div>
           </div>
 
           {/* Status selector for Team Leader */}
@@ -460,6 +610,34 @@ const S: Record<string, CSSProperties> = {
     background:'var(--surface)', marginBottom:8, border:'1px solid var(--border)',
   },
   actions:  { display:'flex', flexWrap:'wrap', gap:6, marginBottom:8 },
+  modelFolder: {
+    marginBottom: 10,
+    padding: '8px 10px',
+    background: 'var(--surface2)',
+    borderRadius: 8,
+    border: '1px solid var(--border)',
+  },
+  modelFolderHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  modelFolderLabel: {
+    fontSize: 11,
+    fontWeight: 600,
+    color: 'var(--text)',
+  },
+  modelFolderActions: {
+    display: 'flex',
+    gap: 6,
+  },
+  modelFolderPath: {
+    fontSize: 10,
+    color: 'var(--text3)',
+    fontFamily: 'monospace',
+    wordBreak: 'break-all',
+  },
   statusRow:{ display:'flex', alignItems:'center', gap:8, marginTop:6 },
   statusLabel:{ fontSize:11, color:'var(--text3)' },
   select: {

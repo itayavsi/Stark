@@ -98,6 +98,7 @@ def init_db() -> None:
                     date TEXT NOT NULL,
                     assigned_user TEXT NULL,
                     shapefile_path TEXT NULL,
+                    model_folder TEXT NULL,
                     group_name TEXT NOT NULL,
                     year INTEGER NOT NULL,
                     ft TEXT NOT NULL
@@ -116,6 +117,7 @@ def init_db() -> None:
                     date TEXT NOT NULL,
                     assigned_user TEXT NULL,
                     shapefile_path TEXT NULL,
+                    model_folder TEXT NULL,
                     group_name TEXT NOT NULL,
                     year INTEGER NOT NULL,
                     ft TEXT NOT NULL
@@ -192,6 +194,18 @@ def init_db() -> None:
                 f"""
                 ALTER TABLE {FINISHED_QUESTS_TABLE}
                 ADD COLUMN IF NOT EXISTS notes TEXT NOT NULL DEFAULT '';
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {OPEN_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS model_folder TEXT NULL;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {FINISHED_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS model_folder TEXT NULL;
                 """
             )
             cur.execute(
@@ -444,7 +458,7 @@ def init_db() -> None:
                 f"""
                 INSERT INTO {FINISHED_QUESTS_TABLE} (
                     id, title, description, status, "תעדוף", date, assigned_user,
-                    shapefile_path, group_name, year, ft, "מצייח",
+                    shapefile_path, model_folder, group_name, year, ft, "מצייח",
                     sync_external_id, sync_source, sync_name,
                     geometry_type, geometry_status, geometry_geojson, geometry_source_path,
                     geometry_source_name, geometry_upload_kind, geometry_feature_count,
@@ -454,7 +468,7 @@ def init_db() -> None:
                 )
                 SELECT
                     id, title, description, status, "תעדוף", date, assigned_user,
-                    shapefile_path, group_name, year, ft, "מצייח",
+                    shapefile_path, model_folder, group_name, year, ft, "מצייח",
                     sync_external_id, sync_source, sync_name,
                     geometry_type, geometry_status, geometry_geojson, geometry_source_path,
                     geometry_source_name, geometry_upload_kind, geometry_feature_count,
