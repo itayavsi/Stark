@@ -1,5 +1,5 @@
 import type { Quest, QuestStatus } from '../types/domain';
-import { ALL_QUEST_COLUMNS, QUEST_PANEL_SORT_KEY_BY_COLUMN } from '../config/questTableColumns';
+import { ALL_QUEST_COLUMNS, type QuestPanelColumnKey } from '../config/questTableColumns';
 
 interface QuestView {
   id: 'open' | 'done' | 'stopped' | 'more';
@@ -41,7 +41,6 @@ export function isMoreQuest(quest: Quest): boolean {
 
 export { ALL_QUEST_COLUMNS };
 
-const SORT_KEY_BY_COLUMN = QUEST_PANEL_SORT_KEY_BY_COLUMN;
 
 export interface QuestSortOption {
   id: 'manual' | 'ft' | 'date' | 'assigned_user';
@@ -127,18 +126,16 @@ export function filterQuests(
 
 export function sortQuests(
   quests: Quest[],
-  sortColumn: (typeof ALL_QUEST_COLUMNS)[number] | null,
+  sortColumn: QuestPanelColumnKey | null,
   sortDirection: 'asc' | 'desc'
 ): Quest[] {
   if (!sortColumn) {
     return quests;
   }
 
-  const key = SORT_KEY_BY_COLUMN[sortColumn];
-
   return [...quests].sort((left, right) => {
-    const leftValue = String(left[key] ?? '');
-    const rightValue = String(right[key] ?? '');
+    const leftValue = String(left[sortColumn as keyof Quest] ?? '');
+    const rightValue = String(right[sortColumn as keyof Quest] ?? '');
 
     return sortDirection === 'asc'
       ? leftValue.localeCompare(rightValue)

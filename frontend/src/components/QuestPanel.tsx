@@ -14,7 +14,6 @@ import { FT_OPTIONS, ftColor } from '../services/ftConfig';
 import type { FtOption, GeometryCatalog, LngLatPoint, Quest } from '../types/domain';
 import { parseUTM } from '../utils/geo';
 import {
-  ALL_QUEST_COLUMNS,
   QUEST_SORT_OPTIONS,
   QUEST_VIEWS,
   getQuestDisplayStatus,
@@ -29,6 +28,11 @@ import {
   type QuestSortOptionId,
   type QuestViewId,
 } from '../utils/quests';
+import {
+  QUEST_PANEL_COLUMNS,
+  QUEST_PANEL_DEFAULT_COL_WIDTHS,
+  type QuestPanelColumnKey,
+} from '../config/questTableColumns';
 import { filterQuests } from '../utils/quests';
 import QuestItem from './QuestItem';
 
@@ -70,8 +74,11 @@ export default function QuestPanel({
   const [jumpUtm, setJumpUtm] = useState('');
   const [jumpError, setJumpError] = useState('');
   const [creating, setCreating] = useState(false);
-  const [sortCol, setSortCol] = useState<(typeof ALL_QUEST_COLUMNS)[number] | null>(null);
+  const [sortCol, setSortCol] = useState<QuestPanelColumnKey | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
+  const [resizing, setResizing] = useState<{ key: QuestPanelColumnKey; startX: number; startWidth: number } | null>(null);
+  const resizingRef = useRef<{ key: QuestPanelColumnKey; startX: number; startWidth: number } | null>(null);
   const [listSort, setListSort] = useState<QuestSortOptionId>('manual');
   const [listSortDir, setListSortDir] = useState<'asc' | 'desc'>('asc');
   const [manualOrderByView, setManualOrderByView] = useState<Record<QuestViewId, string[]>>({
@@ -138,6 +145,31 @@ export default function QuestPanel({
   }, []);
 
   useEffect(() => {
+    const handleMouseMove = (event: MouseEvent) => {
+      const r = resizingRef.current;
+      if (!r) return;
+      const delta = -(event.clientX - r.startX);
+      const newWidth = Math.max(60, r.startWidth + delta);
+      setColumnWidths((prev) => ({ ...prev, [r.key]: newWidth }));
+    };
+
+    const handleMouseUp = () => {
+      setResizing(null);
+      resizingRef.current = null;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [resizing]);
+
+  useEffect(() => {
     if (latestNewQuests.length === 0) {
       return;
     }
@@ -189,7 +221,7 @@ export default function QuestPanel({
     };
   }, [currentGroup, view]);
 
-  const handleSort = (col: (typeof ALL_QUEST_COLUMNS)[number]) => {
+  const handleSort = (col: QuestPanelColumnKey) => {
     if (sortCol === col) {
       setSortDir((current) => (current === 'asc' ? 'desc' : 'asc'));
       return;
@@ -198,6 +230,20 @@ export default function QuestPanel({
     setSortCol(col);
     setSortDir('asc');
   };
+
+  const startResize = (event: React.MouseEvent, key: QuestPanelColumnKey) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const width = columnWidths[key] || QUEST_PANEL_DEFAULT_COL_WIDTHS[key] || 120;
+    const state = { key, startX: event.clientX, startWidth: width };
+    setResizing(state);
+    resizingRef.current = state;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  };
+
+  const getColumnWidth = (key: QuestPanelColumnKey) =>
+    columnWidths[key] || QUEST_PANEL_DEFAULT_COL_WIDTHS[key] || undefined;
 
   const handleListSortChange = (nextSortId: QuestSortOptionId) => {
     setListSort(nextSortId);
@@ -281,11 +327,19 @@ export default function QuestPanel({
     }
   };
 
+  const getQuestPanelCellValue = (quest: Quest, column: QuestPanelColumnKey, index: number) => {
+    if (column === 'id') return index + 1;
+    if (column === 'status') return getQuestStatusLabel(getQuestDisplayStatus(quest));
+    const value = quest[column as keyof Quest];
+    return value ?? '';
+  };
+
   const exportCSV = () => {
-    const header = ALL_QUEST_COLUMNS.join(',');
-    const rows   = sortedRows.map((q, i) =>
-      [i + 1, q.title, q.ft, getQuestStatusLabel(getQuestDisplayStatus(q)), q.date, q.assigned_user || '', q.description || '', q.year]
-        .map(v => `"${String(v||'').replace(/"/g,'""')}"`)
+    const header = QUEST_PANEL_COLUMNS.map((col) => col.label).join(',');
+    const rows = sortedRows.map((q, i) =>
+      QUEST_PANEL_COLUMNS
+        .map((col) => getQuestPanelCellValue(q, col.key, i))
+        .map((v) => `"${String(v || '').replace(/"/g, '""')}"`)
         .join(',')
     ).join('\n');
     const blob = new Blob(['\uFEFF' + header + '\n' + rows], { type: 'text/csv;charset=utf-8;' });
@@ -405,12 +459,30 @@ export default function QuestPanel({
             <table style={FS.table}>
               <thead>
                 <tr>
-                  {ALL_QUEST_COLUMNS.map(col => (
-                    <th key={col} style={FS.th} onClick={() => handleSort(col)}>
-                      {col} {sortCol === col ? (sortDir === 'asc' ? '↑' : '↓') : ''}
+                  {QUEST_PANEL_COLUMNS.map((col) => (
+                    <th
+                      key={col.key}
+                      style={{ ...FS.th, width: getColumnWidth(col.key), minWidth: 80 }}
+                      onClick={() => {
+                        if (resizing) return;
+                        handleSort(col.key);
+                      }}
+                    >
+                      <div style={FS.thContent}>
+                        <span style={FS.thLabel}>
+                          {col.label} {sortCol === col.key ? (sortDir === 'asc' ? '↑' : '↓') : ''}
+                        </span>
+                        <div
+                          style={{
+                            ...FS.resizeHandle,
+                            ...(resizing?.key === col.key ? FS.resizeHandleActive : {}),
+                          }}
+                          onMouseDown={(event) => startResize(event, col.key)}
+                        />
+                      </div>
                     </th>
                   ))}
-                  {isLeader && <th style={FS.th}>פעולות</th>}
+                  {isLeader && <th style={{ ...FS.th, width: 100, minWidth: 90 }}>סטטוס</th>}
                 </tr>
               </thead>
               <tbody>
@@ -422,27 +494,75 @@ export default function QuestPanel({
                       style={{ ...FS.tr, ...FS.trClickable, borderRight: `3px solid ${clr}` }}
                       onClick={() => void onShowOnMap(q)}
                     >
-                      <td style={FS.td}>{i + 1}</td>
-                      <td style={{ ...FS.td, fontWeight: 600, maxWidth: 220 }}>{q.title}</td>
-                      <td style={FS.td}>
-                        <span style={{ ...FS.ftBadge, background: clr + '22', color: clr, border: `1px solid ${clr}55` }}>
-                          {q.ft || '—'}
-                        </span>
-                      </td>
-                      <td style={FS.td}>
-                        <span style={FS.statusBadge} data-status={getQuestDisplayStatus(q)}>
-                          {getQuestDisplayStatus(q) === 'New' ? '🔔 חדש' : getQuestStatusLabel(getQuestDisplayStatus(q))}
-                        </span>
-                        {isLowPriorityQuest(q) && <span style={FS.priorityBadge}>⋯ תעדוף נמוך</span>}
-                      </td>
-                      <td style={FS.td}>{q.date}</td>
-                      <td style={FS.td}>{q.assigned_user || '—'}</td>
-                      <td style={{ ...FS.td, maxWidth: 260, color: 'var(--text2)', fontSize: 11 }}>
-                        {q.description || '—'}
-                      </td>
-                      <td style={FS.td}>{q.year}</td>
+                      {QUEST_PANEL_COLUMNS.map((col) => {
+                        if (col.key === 'id') {
+                          return (
+                            <td key={`${q.id}-id`} style={{ ...FS.td, width: getColumnWidth(col.key) }}>
+                              {i + 1}
+                            </td>
+                          );
+                        }
+                        if (col.key === 'title') {
+                          return (
+                            <td key={`${q.id}-title`} style={{ ...FS.td, fontWeight: 600, width: getColumnWidth(col.key) }}>
+                              {q.title}
+                            </td>
+                          );
+                        }
+                        if (col.key === 'ft') {
+                          return (
+                            <td key={`${q.id}-ft`} style={{ ...FS.td, width: getColumnWidth(col.key) }}>
+                              <span style={{ ...FS.ftBadge, background: clr + '22', color: clr, border: `1px solid ${clr}55` }}>
+                                {q.ft || '—'}
+                              </span>
+                            </td>
+                          );
+                        }
+                        if (col.key === 'status') {
+                          return (
+                            <td key={`${q.id}-status`} style={{ ...FS.td, width: getColumnWidth(col.key) }}>
+                              <span style={FS.statusBadge} data-status={getQuestDisplayStatus(q)}>
+                                {getQuestDisplayStatus(q) === 'New' ? '🔔 חדש' : getQuestStatusLabel(getQuestDisplayStatus(q))}
+                              </span>
+                              {isLowPriorityQuest(q) && <span style={FS.priorityBadge}>⋯ תעדוף נמוך</span>}
+                            </td>
+                          );
+                        }
+                        if (col.key === 'description') {
+                          return (
+                            <td
+                              key={`${q.id}-description`}
+                              style={{ ...FS.td, width: getColumnWidth(col.key), color: 'var(--text2)', fontSize: 11 }}
+                            >
+                              {q.description || '—'}
+                            </td>
+                          );
+                        }
+                        if (col.key === 'notes') {
+                          return (
+                            <td
+                              key={`${q.id}-notes`}
+                              style={{ ...FS.td, width: getColumnWidth(col.key), color: 'var(--text2)', fontSize: 11 }}
+                            >
+                              {q.notes || '—'}
+                            </td>
+                          );
+                        }
+                        if (col.key === 'model_folder') {
+                          return (
+                            <td key={`${q.id}-model_folder`} style={{ ...FS.td, width: getColumnWidth(col.key), fontFamily: 'monospace' }}>
+                              {q.model_folder || '—'}
+                            </td>
+                          );
+                        }
+                        return (
+                          <td key={`${q.id}-${col.key}`} style={{ ...FS.td, width: getColumnWidth(col.key) }}>
+                            {String(q[col.key as keyof Quest] ?? '—')}
+                          </td>
+                        );
+                      })}
                       {isLeader && (
-                        <td style={FS.td}>
+                        <td style={{ ...FS.td, width: 140 }}>
                           <select
                             style={FS.select}
                             value={q.status}
@@ -990,13 +1110,36 @@ const FS: Record<string, CSSProperties> = {
     fontSize:12, fontFamily:'var(--font)', outline:'none', width:160, direction:'rtl',
   },
   tableWrap: { flex:1, overflow:'auto' },
-  table:  { width:'100%', borderCollapse:'collapse', fontSize:13, tableLayout:'auto' },
+  table:  { width:'100%', borderCollapse:'collapse', fontSize:13, tableLayout:'fixed' },
   th: {
     background:'var(--surface2)', borderBottom:'1px solid var(--border)',
     borderLeft:'1px solid var(--border)',
     padding:'8px 12px', fontWeight:700, color:'var(--text2)',
     whiteSpace:'nowrap', cursor:'pointer', position:'sticky', top:0, zIndex:2,
     textAlign:'right', userSelect:'none',
+  },
+  thContent: {
+    display:'flex',
+    alignItems:'center',
+    justifyContent:'space-between',
+    gap:8,
+  },
+  thLabel: {
+    flex:1,
+    overflow:'hidden',
+    textOverflow:'ellipsis',
+  },
+  resizeHandle: {
+    width:8,
+    height:18,
+    cursor:'col-resize',
+    background:'var(--accent)',
+    borderRadius:2,
+    flexShrink:0,
+    opacity:0.3,
+  },
+  resizeHandleActive: {
+    opacity:1,
   },
   tr: {
     borderBottom:'1px solid rgba(255,255,255,0.04)',

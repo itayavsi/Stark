@@ -100,17 +100,37 @@ export const getAttributeTableColumns = (mode: AttributeTableViewMode): Attribut
   }
 };
 
-// # Quest panel (Excel table) columns: add/remove/change here
-export const ALL_QUEST_COLUMNS = ['#', 'כותרת', 'FT', 'סטטוס', 'תאריך', 'משתמש', 'תיאור', 'שנה'] as const;
+export type QuestPanelColumnKey = keyof Quest | 'id';
 
-// # Quest panel sort mapping: add new column mapping here
-export const QUEST_PANEL_SORT_KEY_BY_COLUMN: Record<(typeof ALL_QUEST_COLUMNS)[number], keyof Quest | 'id'> = {
-  '#': 'id',
-  'כותרת': 'title',
-  FT: 'ft',
-  'סטטוס': 'status',
-  'תאריך': 'date',
-  'משתמש': 'assigned_user',
-  'תיאור': 'description',
-  'שנה': 'year',
+export interface QuestPanelColumn {
+  key: QuestPanelColumnKey;
+  label: string;
+}
+
+// # Quest panel (Excel table) columns: add/remove/change here
+export const QUEST_PANEL_COLUMNS: QuestPanelColumn[] = [
+  { key: 'id', label: '#' },
+  { key: 'title', label: 'כותרת' },
+  { key: 'ft', label: 'FT' },
+  { key: 'status', label: 'סטטוס' },
+  { key: 'date', label: 'תאריך' },
+  { key: 'assigned_user', label: 'משתמש' },
+  { key: 'description', label: 'תיאור' },
+  { key: 'notes', label: 'הערות' },
+  { key: 'model_folder', label: 'Model Folder' },
+];
+
+// # Quest panel default widths: add width for new column key here
+export const QUEST_PANEL_DEFAULT_COL_WIDTHS: Partial<Record<QuestPanelColumnKey, number>> = {
+  id: 60,
+  title: 220,
+  ft: 90,
+  status: 140,
+  date: 110,
+  assigned_user: 140,
+  description: 260,
+  notes: 220,
+  model_folder: 200,
 };
+
+export const ALL_QUEST_COLUMNS = QUEST_PANEL_COLUMNS.map((col) => col.label) as readonly string[];
