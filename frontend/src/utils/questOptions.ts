@@ -1,19 +1,17 @@
-import type { MatziahOption, QuestPriority, QuestStatus } from '../types/domain';
+import type { MatziahOption, QuestPriority } from '../types/domain';
+import {
+  QUEST_STATUS_OPTIONS,
+  type QuestStatusOption,
+  DEFAULT_QUEST_STATUS,
+} from '../config/questTableColumns';
 
-export const QUEST_STATUS_OPTIONS: Array<{ value: QuestStatus | string; label: string }> = [
-  { value: 'Open', label: 'פתוח' },
-  { value: 'Taken', label: 'נלקח' },
-  { value: 'In Progress', label: 'בביצוע' },
-  { value: 'ממתין', label: 'ממתין' },
-  { value: 'Done', label: 'הושלם' },
-  { value: 'Approved', label: 'מאושר' },
-  { value: 'Stopped', label: 'הופסק' },
-  { value: 'Cancelled', label: 'בוטל' },
-];
+export { QUEST_STATUS_OPTIONS };
 
-export const QUICK_CREATE_STATUS_OPTIONS = QUEST_STATUS_OPTIONS.filter(
-  (option) => option.value === 'Open' || option.value === 'ממתין'
+export const QUICK_CREATE_STATUS_OPTIONS: QuestStatusOption[] = QUEST_STATUS_OPTIONS.filter(
+  (option) => option.category === 'start'
 );
+
+export const DEFAULT_STATUS = DEFAULT_QUEST_STATUS;
 
 export const QUEST_PRIORITY_OPTIONS: Array<{ value: QuestPriority | string; label: string }> = [
   { value: 'גבוה', label: 'תעדוף גבוה' },

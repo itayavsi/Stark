@@ -9,21 +9,20 @@ import {
 } from '../services/api';
 import { ftColor } from '../services/ftConfig';
 import type { GeometryCatalog, Quest, QuestGeometryRecord, User } from '../types/domain';
-import { getQuestDisplayStatus, isLowPriorityQuest } from '../utils/quests';
+import { getQuestDisplayStatus, getQuestStatusLabel, getStatusCategory, isFinishedStatus, isLowPriorityQuest, isStartStatus } from '../utils/quests';
+import { QUEST_STATUS_OPTIONS } from '../config/questTableColumns';
 import AccuracyModal from './AccuracyModal';
 import QuestGeometryEditor from './QuestGeometryEditor';
 
-const STATUS_MAP = {
-  New:           { label: '🔔 חדש', cls: 'badge-new' },
-  'Open':        { label: 'פתוח',   cls: 'badge-open' },
-  'Taken':       { label: 'נלקח',   cls: 'badge-taken' },
-  'In Progress': { label: 'בביצוע', cls: 'badge-progress' },
-  'Done':        { label: 'הושלם',  cls: 'badge-done' },
-  'Approved':    { label: 'מאושר',  cls: 'badge-approved' },
-  'Stopped':     { label: 'הופסק',  cls: 'badge-open' },
-  'Cancelled':   { label: 'בוטל',   cls: 'badge-open' },
-  'ממתין':       { label: 'ממתין',  cls: 'badge-pending' },
-} as const;
+const getStatusClass = (status: string) => {
+  if (status === 'New') return 'badge-new';
+  const category = getStatusCategory(status);
+  if (category === 'finished') return 'badge-done';
+  if (category === 'on_hold') return 'badge-pending';
+  if (category === 'paused') return 'badge-open';
+  if (category === 'start') return 'badge-open';
+  return 'badge-in-progress';
+};
 
 type MessageType = 'success' | 'error' | 'warning' | 'info';
 
@@ -54,7 +53,10 @@ export default function QuestItem({
   const isViewer = role === 'Viewer';
   const isLeader = role === 'Team Leader';
   const displayStatus = getQuestDisplayStatus(quest);
-  const status = STATUS_MAP[displayStatus as keyof typeof STATUS_MAP] || { label: displayStatus, cls: 'badge-open' };
+  const status = {
+    label: displayStatus === 'New' ? '🔔 חדש' : getQuestStatusLabel(displayStatus),
+    cls: getStatusClass(displayStatus),
+  };
   const ftClr = ftColor(quest.ft);
   const lowPriority = isLowPriorityQuest(quest);
   const isExternalQuest = quest.id.startsWith('external:');
@@ -121,7 +123,7 @@ export default function QuestItem({
     setBusy(true);
     try {
       await setQuestStatus(quest.id, s);
-      showMsg(`✓ סטטוס עודכן: ${STATUS_MAP[s as keyof typeof STATUS_MAP]?.label || s}`, 'success');
+      showMsg(`✓ סטטוס עודכן: ${getQuestStatusLabel(s)}`, 'success');
       await onRefresh();
     } catch {
       showMsg('✗ שגיאה בעדכון סטטוס', 'error');
@@ -318,7 +320,7 @@ export default function QuestItem({
       <div style={S.topRow}>
         <div style={S.topLeft}>
           <span className={`badge ${status.cls}`}>{status.label}</span>
-          {lowPriority && <span style={S.priorityBadge}>⋯ תעדוף נמוך</span>}
+          {lowPriority && <span style={S.priorityBadge}> תעדוף נמוך</span>}
           {matziahLabel && <span style={S.syncBadge}>{matziahLabel}</span>}
           <span style={S.geometryBadge}>{geometryLabel}</span>
           {!quest.ft && quest.year && <span style={{ fontSize:11, color: ftClr, fontWeight:700 }}>{quest.year}</span>}
@@ -423,7 +425,7 @@ export default function QuestItem({
           <div style={S.actions}>
 
             {/* Take quest */}
-            {quest.status === 'Open' && !isViewer && !isExternalQuest && (
+            {isStartStatus(quest.status) && !isViewer && !isExternalQuest && (
               <button className="btn btn-success btn-sm" onClick={handleTake} disabled={busy}>
                 ✋ קח משימה
               </button>
@@ -445,15 +447,15 @@ export default function QuestItem({
             )}
 
             {/* Complete with accuracy */}
-            {canComplete && quest.status !== 'Done' && quest.status !== 'Approved' && (
-              <button
-                className="btn btn-success btn-sm"
-                onClick={(e) => { e.stopPropagation(); setShowAccuracyModal(true); }}
-                disabled={busy}
-              >
-                ✓ השלם עם דיוק
-              </button>
-            )}
+          {canComplete && !isFinishedStatus(quest.status) && (
+            <button
+              className="btn btn-success btn-sm"
+              onClick={(e) => { e.stopPropagation(); setShowAccuracyModal(true); }}
+              disabled={busy}
+            >
+              ✓ השלם עם דיוק
+            </button>
+          )}
 
           </div>
 
@@ -511,17 +513,8 @@ export default function QuestItem({
                 disabled={busy}
                 onClick={e => e.stopPropagation()}
               >
-                {Object.entries({
-                  Open: 'פתוח',
-                  Taken: 'נלקח',
-                  'In Progress': 'בביצוע',
-                  ממתין: 'ממתין',
-                  Done: 'הושלם',
-                  Approved: 'מאושר',
-                  Stopped: 'הופסק',
-                  Cancelled: 'בוטל',
-                }).map(([k, v]) => (
-                  <option key={k} value={k}>{v}</option>
+                {QUEST_STATUS_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
                 ))}
               </select>
             </div>
@@ -544,7 +537,7 @@ export default function QuestItem({
             </div>
           )}
 
-          {!isViewer && !isExternalQuest && quest.status !== 'Approved' && (
+          {!isViewer && !isExternalQuest && !isFinishedStatus(quest.status) && (
             <QuestGeometryEditor
               quest={quest}
               disabled={busy}

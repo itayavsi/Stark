@@ -24,14 +24,27 @@ export interface UserUpdateInput {
 }
 
 export type QuestStatus =
-  | 'Open'
-  | 'Taken'
-  | 'In Progress'
-  | 'Done'
-  | 'Approved'
-  | 'Stopped'
-  | 'Cancelled'
-  | 'ממתין';
+  | 'Start'
+  | 'Search'
+  | 'Production'
+  | 'Solve'
+  | 'MBT_solve'
+  | 'Tiyuv'
+  | 'acc_test'
+  | 'Kilta'
+  | 'Paused'
+  | 'Finished'
+  | 'Ziyuah_mipuy'
+  | 'Klita_mipuy'
+  | 'MQA'
+  | 'BDB'
+  | 'QL'
+  | 'BDB_hold'
+  | 'need_ziyuah'
+  | 'hold_ziyuah'
+  | 'Snow_ziyuah'
+  | 'Need_Nezah'
+  | 'Approved_Nezah';
 
 export type QuestPriority = 'גבוה' | 'רגיל' | 'נמוך';
 
@@ -58,6 +71,7 @@ export interface Quest {
   lng?: number;
   lat?: number;
   shapefile_path?: string;
+  model_simulations?: string | null;
   model_folder?: string | null;
   matziah?: MatziahOption | string;
   sync_external_id?: string;
@@ -93,6 +107,7 @@ export interface CreateQuestInput {
   quest_type?: FtOption | string;
   group?: string;
   shapefile_path?: string;
+  model_simulations?: string | null;
   model_folder?: string | null;
   matziah?: MatziahOption | string;
   sync_external_id?: string;

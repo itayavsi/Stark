@@ -1,10 +1,11 @@
 import { useMemo, useState, useRef, useEffect, type CSSProperties } from 'react';
 
-import type { LayerFilters, Quest, QuestPriority, QuestStatus } from '../types/domain';
+import type { LayerFilters, Quest, QuestPriority } from '../types/domain';
 import {
   ATTRIBUTE_TABLE_DEFAULT_COL_WIDTHS,
   ATTRIBUTE_TABLE_SQL_FIELDS,
   getAttributeTableColumns,
+  QUEST_STATUS_OPTIONS,
   type AttributeColumnKey,
   type AttributeColumn,
 } from '../config/questTableColumns';
@@ -23,7 +24,16 @@ interface AttributeTableProps {
   onViewModeChange?: (mode: 'all' | 'active' | 'finished') => void;
 }
 
-type EditableField = 'title' | 'status' | 'priority' | 'assigned_user' | 'group' | 'year' | 'date' | 'notes';
+type EditableField =
+  | 'title'
+  | 'status'
+  | 'priority'
+  | 'assigned_user'
+  | 'group'
+  | 'year'
+  | 'date'
+  | 'notes'
+  | 'model_simulations';
 
 interface SqlFilter {
   field: keyof Quest;
@@ -34,7 +44,6 @@ interface SqlFilter {
 type ViewMode = 'all' | 'active' | 'finished';
 
 
-const STATUS_OPTIONS: QuestStatus[] = ['Open', 'Taken', 'In Progress', 'Done', 'Approved', 'Stopped', 'Cancelled', 'ממתין'];
 const PRIORITY_OPTIONS: QuestPriority[] = ['גבוה', 'רגיל', 'נמוך'];
 
 export default function AttributeTable({
@@ -770,8 +779,8 @@ function EditableCell({
         onChange={(e) => onChange(e.target.value)}
         onClick={(e) => e.stopPropagation()}
       >
-        {STATUS_OPTIONS.map((opt) => (
-          <option key={opt} value={opt}>{opt}</option>
+        {QUEST_STATUS_OPTIONS.map((opt) => (
+          <option key={opt.value} value={opt.value}>{opt.label}</option>
         ))}
       </select>
     );

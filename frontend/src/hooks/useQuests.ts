@@ -6,6 +6,7 @@ import {
 } from '../lib/pendingQuestNotifications';
 import { getQuests } from '../services/api';
 import type { Quest } from '../types/domain';
+import { isStartStatus } from '../utils/quests';
 
 export function useQuests() {
   const [quests, setQuests] = useState<Quest[]>([]);
@@ -30,7 +31,7 @@ export function useQuests() {
 
       const persistentNewIds = [...newQuestIdsRef.current].filter((questId) => {
         const quest = nextQuests.find((entry) => entry.id === questId);
-        return Boolean(quest && (quest.status === 'Open' || quest.status === 'ממתין'));
+        return Boolean(quest && isStartStatus(quest.status));
       });
       const mergedNewIds = new Set([...persistentNewIds, ...latestNewQuestMap.keys()]);
 

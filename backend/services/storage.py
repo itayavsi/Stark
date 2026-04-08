@@ -25,6 +25,7 @@ def _normalize_quest(row: Dict) -> Dict:
         "title": row["title"],
         "description": row["description"],
         "notes": row.get("notes", ""),
+        "model_simulations": row.get("model_simulations"),
         "status": row["status"],
         "priority": row["priority"],
         "date": row["date"],
@@ -63,6 +64,7 @@ def _quest_columns(table_alias: str = "q") -> str:
         {prefix}title,
         {prefix}description,
         {prefix}notes,
+        {prefix}model_simulations,
         {prefix}status,
         {prefix}"תעדוף" AS priority,
         {prefix}date,
@@ -266,20 +268,22 @@ def get_quest_by_sync_external_id(external_id: str) -> Optional[Dict]:
 
 
 def save_quest(quest: Dict):
-    target_table = FINISHED_QUESTS_TABLE if quest.get("status") in {"Done", "Approved"} else OPEN_QUESTS_TABLE
+    target_table = FINISHED_QUESTS_TABLE if quest.get("status") in {"Finished"} else OPEN_QUESTS_TABLE
+    if target_table == FINISHED_QUESTS_TABLE:
+        quest = {**quest, "model_simulations": None}
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 f"""
                 INSERT INTO {target_table} (
                     id, title, description, status, "תעדוף", date, assigned_user,
-                    shapefile_path, model_folder, group_name, year, ft, "מצייח",
+                    shapefile_path, model_simulations, model_folder, group_name, year, ft, "מצייח",
                     sync_external_id, sync_source, sync_name,
                     geometry_status, geometry_source_path, geometry_feature_count, geometry_updated_at
                 )
                 VALUES (
                     %(id)s, %(title)s, %(description)s, %(status)s, %(priority)s, %(date)s, %(assigned_user)s,
-                    %(shapefile_path)s, %(model_folder)s, %(group_name)s, %(year)s, %(ft)s, %(matziah)s,
+                    %(shapefile_path)s, %(model_simulations)s, %(model_folder)s, %(group_name)s, %(year)s, %(ft)s, %(matziah)s,
                     %(sync_external_id)s, %(sync_source)s, %(sync_name)s,
                     %(geometry_status)s, %(geometry_source_path)s, %(geometry_feature_count)s, NOW()
                 );
@@ -293,6 +297,7 @@ def save_quest(quest: Dict):
                     "date": quest["date"],
                     "assigned_user": quest["assigned_user"],
                     "shapefile_path": quest["shapefile_path"],
+                    "model_simulations": quest.get("model_simulations"),
                     "model_folder": quest.get("model_folder"),
                     "group_name": quest["group"],
                     "year": quest["year"],
@@ -316,6 +321,7 @@ def update_quest(quest_id: str, updates: Dict) -> Optional[Dict]:
         "title": "title",
         "description": "description",
         "notes": "notes",
+        "model_simulations": "model_simulations",
         "status": "status",
         "priority": '"תעדוף"',
         "date": "date",
@@ -398,6 +404,7 @@ def move_quest(quest_id: str, destination_table: str, updates: Optional[Dict] = 
         "title": "title",
         "description": "description",
         "notes": "notes",
+        "model_simulations": "model_simulations",
         "status": "status",
         "priority": "priority",
         "date": "date",
@@ -447,6 +454,7 @@ def move_quest(quest_id: str, destination_table: str, updates: Optional[Dict] = 
                     title,
                     description,
                     notes,
+                    model_simulations,
                     status,
                     "תעדוף" AS priority,
                     date,
@@ -489,6 +497,7 @@ def move_quest(quest_id: str, destination_table: str, updates: Optional[Dict] = 
                 "title": row["title"],
                 "description": row["description"],
                 "notes": row.get("notes", ""),
+                "model_simulations": row.get("model_simulations"),
                 "status": row["status"],
                 "priority": row["priority"],
                 "date": row["date"],
@@ -525,6 +534,9 @@ def move_quest(quest_id: str, destination_table: str, updates: Optional[Dict] = 
                 if key in allowed_fields:
                     quest[key] = value
 
+            if destination_table == FINISHED_QUESTS_TABLE:
+                quest["model_simulations"] = None
+
             for json_key in ("geometry_geojson", "geometry_point_geojson", "geometry_polygon_geojson"):
                 if isinstance(quest.get(json_key), dict):
                     quest[json_key] = json.dumps(quest[json_key])
@@ -534,6 +546,7 @@ def move_quest(quest_id: str, destination_table: str, updates: Optional[Dict] = 
                 ("title", "title"),
                 ("description", "description"),
                 ("notes", "notes"),
+                ("model_simulations", "model_simulations"),
                 ("status", "status"),
                 ('"תעדוף"', "priority"),
                 ("date", "date"),

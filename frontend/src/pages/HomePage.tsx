@@ -8,6 +8,7 @@ import QuestPanel from '../components/QuestPanel';
 import { useQuests } from '../hooks/useQuests';
 import { deleteQuestPointGeometry, deleteQuestPolygonGeometry, getFinishedGeometryCatalog, getGeometryCatalog, saveQuestPointGeometry, updateQuest, uploadQuestPointsGeometry, uploadQuestPolygonGeometry } from '../services/api';
 import { getFeaturePoint, getQuestGeometryBounds } from '../utils/geo';
+import { isFinishedStatus } from '../utils/quests';
 import type { GeometryCatalog, IdentifiedFeature, IdentifyResults, LayerFilters, LngLatPoint, MapBounds, Quest } from '../types/domain';
 
 const MIN_WIDTH = 220;
@@ -56,11 +57,11 @@ export default function HomePage() {
   const [selectedIdentifyFeatureId, setSelectedIdentifyFeatureId] = useState<string | number | null>(null);
 
   const localQuests = useMemo(
-    () => quests.filter((quest) => !quest.id.startsWith('external:') && quest.status !== 'Done' && quest.status !== 'Approved'),
+    () => quests.filter((quest) => !quest.id.startsWith('external:') && !isFinishedStatus(quest.status)),
     [quests],
   );
   const finishedQuests = useMemo(
-    () => quests.filter((quest) => !quest.id.startsWith('external:') && (quest.status === 'Done' || quest.status === 'Approved')),
+    () => quests.filter((quest) => !quest.id.startsWith('external:') && isFinishedStatus(quest.status)),
     [quests],
   );
   const tableOpen = layerFilters.showPoints || layerFilters.showPolygons;
@@ -211,8 +212,8 @@ export default function HomePage() {
   }, []);
 
   const handleUpdateQuest = useCallback(async (quest: Quest) => {
-    const { id, title, status, priority, assigned_user, group, year, date, notes, model_folder } = quest;
-    await updateQuest(id, { title, status, priority, assigned_user, group, year, date, notes, model_folder });
+    const { id, title, status, priority, assigned_user, group, year, date, notes, model_folder, model_simulations } = quest;
+    await updateQuest(id, { title, status, priority, assigned_user, group, year, date, notes, model_folder, model_simulations });
     await refresh();
     await loadGeometryCatalog();
   }, [refresh, loadGeometryCatalog]);

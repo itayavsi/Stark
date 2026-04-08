@@ -98,6 +98,7 @@ def init_db() -> None:
                     date TEXT NOT NULL,
                     assigned_user TEXT NULL,
                     shapefile_path TEXT NULL,
+                    model_simulations TEXT NULL,
                     model_folder TEXT NULL,
                     group_name TEXT NOT NULL,
                     year INTEGER NOT NULL,
@@ -117,6 +118,7 @@ def init_db() -> None:
                     date TEXT NOT NULL,
                     assigned_user TEXT NULL,
                     shapefile_path TEXT NULL,
+                    model_simulations TEXT NULL,
                     model_folder TEXT NULL,
                     group_name TEXT NOT NULL,
                     year INTEGER NOT NULL,
@@ -194,6 +196,18 @@ def init_db() -> None:
                 f"""
                 ALTER TABLE {FINISHED_QUESTS_TABLE}
                 ADD COLUMN IF NOT EXISTS notes TEXT NOT NULL DEFAULT '';
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {OPEN_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS model_simulations TEXT NULL;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {FINISHED_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS model_simulations TEXT NULL;
                 """
             )
             cur.execute(
@@ -458,7 +472,7 @@ def init_db() -> None:
                 f"""
                 INSERT INTO {FINISHED_QUESTS_TABLE} (
                     id, title, description, status, "תעדוף", date, assigned_user,
-                    shapefile_path, model_folder, group_name, year, ft, "מצייח",
+                    shapefile_path, model_simulations, model_folder, group_name, year, ft, "מצייח",
                     sync_external_id, sync_source, sync_name,
                     geometry_type, geometry_status, geometry_geojson, geometry_source_path,
                     geometry_source_name, geometry_upload_kind, geometry_feature_count,
@@ -468,7 +482,7 @@ def init_db() -> None:
                 )
                 SELECT
                     id, title, description, status, "תעדוף", date, assigned_user,
-                    shapefile_path, model_folder, group_name, year, ft, "מצייח",
+                    shapefile_path, model_simulations, model_folder, group_name, year, ft, "מצייח",
                     sync_external_id, sync_source, sync_name,
                     geometry_type, geometry_status, geometry_geojson, geometry_source_path,
                     geometry_source_name, geometry_upload_kind, geometry_feature_count,
@@ -476,14 +490,14 @@ def init_db() -> None:
                     geometry_point_geojson, geometry_polygon_geojson,
                     geometry_point_feature_count, geometry_polygon_feature_count, geometry_updated_at
                 FROM {OPEN_QUESTS_TABLE}
-                WHERE status IN ('Done', 'Approved')
+                WHERE status IN ('Finished')
                 ON CONFLICT (id) DO NOTHING;
                 """
             )
             cur.execute(
                 f"""
                 DELETE FROM {OPEN_QUESTS_TABLE}
-                WHERE status IN ('Done', 'Approved');
+                WHERE status IN ('Finished');
                 """
             )
             cur.execute(
@@ -690,7 +704,7 @@ def init_db() -> None:
                             "id": _coerce_uuid(quest["id"]),
                             "title": quest.get("title", ""),
                             "description": quest.get("description", ""),
-                            "status": quest.get("status", "Open"),
+                            "status": quest.get("status", "Start"),
                             "priority": quest.get("priority", "רגיל"),
                             "date": _normalize_seed_date(quest.get("date")),
                             "assigned_user": quest.get("assigned_user"),
@@ -699,7 +713,7 @@ def init_db() -> None:
                             "year": quest.get("year", 2026),
                             "ft": quest.get("ft", "FT1"),
                         }
-                        if normalized_quest["status"] in {"Done", "Approved"}:
+                        if normalized_quest["status"] in {"Finished"}:
                             finished_seed_quests.append(normalized_quest)
                         else:
                             open_seed_quests.append(normalized_quest)

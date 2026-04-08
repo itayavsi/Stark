@@ -1,18 +1,33 @@
 import type { Quest, QuestStatus } from '../types/domain';
-import { ALL_QUEST_COLUMNS, type QuestPanelColumnKey } from '../config/questTableColumns';
+import {
+  ALL_QUEST_COLUMNS,
+  QUEST_STATUS_OPTIONS,
+  type QuestPanelColumnKey,
+  type QuestStatusCategory,
+} from '../config/questTableColumns';
 
 interface QuestView {
-  id: 'open' | 'done' | 'stopped' | 'more';
+  id: 'open' | 'done' | 'stopped' | 'more' | 'new' | 'low';
   label: string;
   icon: string;
   statuses: readonly string[];
 }
 
+const STATUS_BY_CATEGORY = QUEST_STATUS_OPTIONS.reduce<Record<QuestStatusCategory, string[]>>(
+  (acc, option) => {
+    acc[option.category].push(option.value);
+    return acc;
+  },
+  { start: [], regular: [], paused: [], finished: [], on_hold: [] }
+);
+
 export const QUEST_VIEWS: readonly QuestView[] = [
-  { id: 'open', label: 'פתוחות', icon: '📋', statuses: ['Open', 'Taken', 'In Progress'] },
-  { id: 'done', label: 'הסתיימו', icon: '✅', statuses: ['Done', 'Approved'] },
-  { id: 'stopped', label: 'הופסקו', icon: '⏸', statuses: ['Stopped', 'Cancelled'] },
-  { id: 'more', label: 'נוספות', icon: '⋯', statuses: ['New', 'ממתין', 'תעדוף נמוך'] },
+  { id: 'open', label: 'פתוחות', icon: '📋', statuses: [...STATUS_BY_CATEGORY.start, ...STATUS_BY_CATEGORY.regular] },
+  { id: 'done', label: 'הסתיימו', icon: '✅', statuses: [...STATUS_BY_CATEGORY.finished] },
+  { id: 'stopped', label: 'הופסקו', icon: '⏸', statuses: [...STATUS_BY_CATEGORY.paused] },
+  { id: 'more', label: 'בהמתנה', icon: '⏳', statuses: [...STATUS_BY_CATEGORY.on_hold] },
+  { id: 'new', label: 'חדשות', icon: '🔔', statuses: [] },
+  { id: 'low', label: 'תעדוף נמוך', icon: '⬇', statuses: [] },
 ] as const;
 
 export type QuestViewId = (typeof QUEST_VIEWS)[number]['id'];
@@ -20,15 +35,51 @@ export type QuestSearchScope = 'current' | 'all';
 
 export const STATUS_LABELS: Record<string, string> = {
   New: 'חדש',
-  Open: 'פתוח',
-  Taken: 'נלקח',
-  'In Progress': 'בביצוע',
-  Done: 'הושלם',
-  Approved: 'מאושר',
-  Stopped: 'הופסק',
-  Cancelled: 'בוטל',
-  ממתין: 'ממתין',
+  ...Object.fromEntries(QUEST_STATUS_OPTIONS.map((opt) => [opt.value, opt.label])),
 };
+
+const LEGACY_STATUS_MAP: Record<string, string> = {
+  Open: 'Start',
+  Taken: 'Production',
+  'In Progress': 'Production',
+  Done: 'Finished',
+  Approved: 'Finished',
+  Stopped: 'Paused',
+  Cancelled: 'Paused',
+  פתוח: 'Start',
+  ממתין: 'Start',
+  הושלם: 'Finished',
+  הופסק: 'Paused',
+};
+
+export function normalizeQuestStatus(status: string | undefined): string | undefined {
+  if (!status || status === 'New') {
+    return status;
+  }
+  return LEGACY_STATUS_MAP[status] ?? status;
+}
+
+export function getStatusCategory(status: string | undefined): QuestStatusCategory | null {
+  const normalized = normalizeQuestStatus(status);
+  if (!normalized) return null;
+  return QUEST_STATUS_OPTIONS.find((opt) => opt.value === normalized)?.category ?? null;
+}
+
+export function isFinishedStatus(status: string | undefined): boolean {
+  return getStatusCategory(status) === 'finished';
+}
+
+export function isPausedStatus(status: string | undefined): boolean {
+  return getStatusCategory(status) === 'paused';
+}
+
+export function isOnHoldStatus(status: string | undefined): boolean {
+  return getStatusCategory(status) === 'on_hold';
+}
+
+export function isStartStatus(status: string | undefined): boolean {
+  return getStatusCategory(status) === 'start';
+}
 
 export function isLowPriorityQuest(quest: Quest): boolean {
   const priority = String(quest.priority ?? '').trim().toLowerCase();
@@ -36,7 +87,12 @@ export function isLowPriorityQuest(quest: Quest): boolean {
 }
 
 export function isMoreQuest(quest: Quest): boolean {
-  return Boolean(quest.isNew) || quest.status === 'ממתין' || isLowPriorityQuest(quest);
+  return isOnHoldStatus(quest.status);
+}
+
+export function isOpenViewQuest(quest: Quest): boolean {
+  const category = getStatusCategory(quest.status);
+  return (category === 'start' || category === 'regular') && !isLowPriorityQuest(quest);
 }
 
 export { ALL_QUEST_COLUMNS };
@@ -83,11 +139,12 @@ export function getQuestView(viewId: QuestViewId) {
 }
 
 export function getQuestStatusLabel(status: QuestStatus | string): string {
-  return STATUS_LABELS[status] ?? status;
+  const normalized = normalizeQuestStatus(status);
+  return STATUS_LABELS[normalized ?? status] ?? (normalized ?? status);
 }
 
 export function getQuestDisplayStatus(quest: Quest): QuestStatus | string {
-  return quest.isNew ? 'New' : quest.status;
+  return quest.isNew ? 'New' : normalizeQuestStatus(quest.status) ?? quest.status;
 }
 
 function matchesQuestSearch(quest: Quest, search: string): boolean {
@@ -111,11 +168,22 @@ export function filterQuests(
   const currentView = getQuestView(viewId);
 
   return quests.filter((quest) => {
-    const matchesView = scope === 'all'
-      ? true
-      : viewId === 'more'
-        ? isMoreQuest(quest)
-        : !isMoreQuest(quest) && currentView.statuses.includes(quest.status);
+    const normalizedStatus = normalizeQuestStatus(quest.status) ?? quest.status;
+    let matchesView = false;
+
+    if (scope === 'all') {
+      matchesView = true;
+    } else if (viewId === 'new') {
+      matchesView = Boolean(quest.isNew);
+    } else if (viewId === 'low') {
+      matchesView = isLowPriorityQuest(quest);
+    } else if (viewId === 'open') {
+      matchesView = isOpenViewQuest(quest);
+    } else if (viewId === 'more') {
+      matchesView = isMoreQuest(quest);
+    } else {
+      matchesView = currentView.statuses.includes(normalizedStatus);
+    }
 
     if (!matchesView || !matchesQuestSearch(quest, search)) {
       return false;

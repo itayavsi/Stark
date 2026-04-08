@@ -12,23 +12,37 @@ EXTERNAL_QUESTS_UPDATE_STATUS_URL = os.getenv("EXTERNAL_QUESTS_UPDATE_STATUS_URL
 EXTERNAL_QUESTS_CREATE_URL = os.getenv("EXTERNAL_QUESTS_CREATE_URL", EXTERNAL_QUESTS_API_URL)
 EXTERNAL_QUESTS_GROUP = os.getenv("EXTERNAL_QUESTS_GROUP", "לווינות")
 EXTERNAL_STATUS_TO_LOCAL = {
-    "Open": "Open",
-    "Taken": "Taken",
-    "In Progress": "In Progress",
-    "Done": "Done",
-    "Approved": "Approved",
-    "Stopped": "Stopped",
-    "Cancelled": "Cancelled",
+    "Open": "Start",
+    "Taken": "Production",
+    "In Progress": "Production",
+    "Done": "Finished",
+    "Approved": "Finished",
+    "Stopped": "Paused",
+    "Cancelled": "Paused",
 }
+
 LOCAL_STATUS_TO_EXTERNAL = {
-    "Open": "Open",
-    "Taken": "In Progress",
-    "In Progress": "In Progress",
-    "Done": "Done",
-    "Approved": "Done",
-    "Stopped": "Stopped",
-    "Cancelled": "Stopped",
-    "ממתין": "Open",
+    "Start": "Open",
+    "Search": "In Progress",
+    "Production": "In Progress",
+    "Solve": "In Progress",
+    "MBT_solve": "In Progress",
+    "Tiyuv": "In Progress",
+    "acc_test": "In Progress",
+    "Kilta": "In Progress",
+    "Klita_mipuy": "In Progress",
+    "MQA": "In Progress",
+    "BDB": "In Progress",
+    "need_ziyuah": "In Progress",
+    "Need_Nezah": "In Progress",
+    "Approved_Nezah": "In Progress",
+    "Ziyuah_mipuy": "Open",
+    "QL": "Open",
+    "BDB_hold": "Open",
+    "hold_ziyuah": "Open",
+    "Paused": "Stopped",
+    "Snow_ziyuah": "Stopped",
+    "Finished": "Done",
 }
 
 
@@ -184,7 +198,7 @@ def find_external_quest_by_signature(name: str, opener: str, date_text: str) -> 
 
 def build_external_quest_payload(data: dict[str, Any]) -> dict[str, Any]:
     date_text = _normalize_date(data.get("date"))
-    local_status = str(data.get("status") or "Open")
+    local_status = str(data.get("status") or "Start")
     quest_type = str(data.get("quest_type") or data.get("ft", "FT1") or "FT1")
     return {
         "name": str(data.get("title", "")).strip(),

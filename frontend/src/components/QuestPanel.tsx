@@ -20,7 +20,7 @@ import {
   getQuestStatusLabel,
   getQuestView,
   isLowPriorityQuest,
-  isMoreQuest,
+  normalizeQuestStatus,
   reorderQuestList,
   sortQuestsByOption,
   sortQuests,
@@ -31,9 +31,11 @@ import {
 import {
   QUEST_PANEL_COLUMNS,
   QUEST_PANEL_DEFAULT_COL_WIDTHS,
+  QUEST_STATUS_OPTIONS,
   type QuestPanelColumnKey,
 } from '../config/questTableColumns';
 import { filterQuests } from '../utils/quests';
+import { DEFAULT_STATUS, QUICK_CREATE_STATUS_OPTIONS } from '../utils/questOptions';
 import QuestItem from './QuestItem';
 
 interface QuestPanelProps {
@@ -53,9 +55,10 @@ export default function QuestPanel({
   onShowOnMap,
   onJumpToPoint,
 }: QuestPanelProps) {
-  const [moreTab, setMoreTab] = useState<'new' | 'pending' | 'low'>('new');
   const notificationTimeoutsRef = useRef<number[]>([]);
+  const panelRef = useRef<HTMLDivElement | null>(null);
   const { user } = useAuth();
+  const [compactTabs, setCompactTabs] = useState(false);
   const [view, setView] = useState<QuestViewId>('open');
   const [search, setSearch] = useState('');
   const [searchScope, setSearchScope] = useState<QuestSearchScope>('current');
@@ -65,7 +68,7 @@ export default function QuestPanel({
   const [newDesc, setNewDesc] = useState('');
   const [newYear, setNewYear] = useState(2026);
   const [newFt, setNewFt] = useState<FtOption>('FT1');
-  const [newStatus, setNewStatus] = useState<'Open' | 'ממתין'>('Open');
+  const [newStatus, setNewStatus] = useState<string>(DEFAULT_STATUS);
   const [newPriority, setNewPriority] = useState<'גבוה' | 'רגיל' | 'נמוך'>('רגיל');
   const [showJump, setShowJump] = useState(false);
   const [jumpMode, setJumpMode] = useState<'utm' | 'dd'>('utm');
@@ -86,6 +89,8 @@ export default function QuestPanel({
     done: [],
     stopped: [],
     more: [],
+    new: [],
+    low: [],
   });
   const [draggedQuestId, setDraggedQuestId] = useState<string | null>(null);
   const [savingSort, setSavingSort] = useState(false);
@@ -93,34 +98,27 @@ export default function QuestPanel({
   const [toastNotifications, setToastNotifications] = useState<Array<{ id: string; title: string }>>([]);
 
   const isLeader = user?.role === 'Team Leader';
+  const sortableViews = useMemo<QuestViewId[]>(() => ['open', 'done', 'stopped', 'more'], []);
+  const canPersistManualSort = isLeader && sortableViews.includes(view);
   const currentView = getQuestView(view);
   const currentGroup = user?.group || 'לווינות';
   const newQuestCount = useMemo(() => quests.filter((quest) => quest.isNew).length, [quests]);
-  const pendingQuestCount = useMemo(
-    () => quests.filter((quest) => quest.status === 'ממתין' && !quest.isNew).length,
-    [quests]
-  );
-  const lowPriorityQuestCount = useMemo(
-    () => quests.filter((quest) => isLowPriorityQuest(quest) && !quest.isNew && quest.status !== 'ממתין').length,
-    [quests]
-  );
   const filteredBase = useMemo(
     () => filterQuests(quests, view, search, searchScope),
     [quests, view, search, searchScope]
   );
-  const filtered = useMemo(() => {
-    if (searchScope === 'all' || view !== 'more') {
-      return filteredBase;
-    }
-
-    return filteredBase.filter((quest) => (
-      moreTab === 'new'
-        ? Boolean(quest.isNew)
-        : moreTab === 'pending'
-          ? quest.status === 'ממתין' && !quest.isNew
-          : isLowPriorityQuest(quest) && !quest.isNew && quest.status !== 'ממתין'
-    ));
-  }, [filteredBase, moreTab, searchScope, view]);
+  const filtered = filteredBase;
+  const questCountByView = useMemo<Record<QuestViewId, number>>(
+    () => ({
+      open: filterQuests(quests, 'open', '', 'current').length,
+      done: filterQuests(quests, 'done', '', 'current').length,
+      stopped: filterQuests(quests, 'stopped', '', 'current').length,
+      more: filterQuests(quests, 'more', '', 'current').length,
+      new: filterQuests(quests, 'new', '', 'current').length,
+      low: filterQuests(quests, 'low', '', 'current').length,
+    }),
+    [quests]
+  );
   const sortedRows = useMemo(() => sortQuests(filtered, sortCol, sortDir), [filtered, sortCol, sortDir]);
   const orderedFiltered = useMemo(() => {
     const manualOrder = manualOrderByView[view] || [];
@@ -142,6 +140,21 @@ export default function QuestPanel({
     return () => {
       notificationTimeoutsRef.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
     };
+  }, []);
+
+  useEffect(() => {
+    const panelElement = panelRef.current;
+    if (!panelElement || typeof ResizeObserver === 'undefined') {
+      return;
+    }
+
+    const observer = new ResizeObserver((entries) => {
+      const nextWidth = entries[0]?.contentRect.width ?? panelElement.clientWidth;
+      setCompactTabs(nextWidth < 560);
+    });
+    observer.observe(panelElement);
+
+    return () => observer.disconnect();
   }, []);
 
   useEffect(() => {
@@ -193,7 +206,7 @@ export default function QuestPanel({
     let cancelled = false;
 
     async function loadSavedSort() {
-      if (view === 'more') {
+      if (!sortableViews.includes(view)) {
         setSortStatus('');
         return;
       }
@@ -219,7 +232,7 @@ export default function QuestPanel({
     return () => {
       cancelled = true;
     };
-  }, [currentGroup, view]);
+  }, [currentGroup, sortableViews, view]);
 
   const handleSort = (col: QuestPanelColumnKey) => {
     if (sortCol === col) {
@@ -275,7 +288,7 @@ export default function QuestPanel({
   };
 
   const handleSaveSort = async () => {
-    if (!isLeader || view === 'more') {
+    if (!canPersistManualSort) {
       return;
     }
 
@@ -316,7 +329,7 @@ export default function QuestPanel({
       setNewDesc('');
       setNewYear(2026);
       setNewFt('FT1');
-      setNewStatus('Open');
+      setNewStatus(DEFAULT_STATUS);
       setNewPriority('רגיל');
       setShowNew(false);
       await onRefresh();
@@ -403,35 +416,10 @@ export default function QuestPanel({
                     style={{ ...FS.tab, ...(view === v.id ? FS.tabActive : {}) }}
                     onClick={() => {
                       setView(v.id);
-                      if (v.id === 'more') {
-                        setMoreTab('new');
-                      }
                     }}
                   >{v.icon} {v.label}</button>
                 ))}
               </div>
-              {view === 'more' && (
-                <div style={FS.subtabs}>
-                  <button
-                    style={{ ...FS.subtab, ...(moreTab === 'new' ? FS.subtabActive : {}) }}
-                    onClick={() => setMoreTab('new')}
-                  >
-                    חדשות
-                  </button>
-                  <button
-                    style={{ ...FS.subtab, ...(moreTab === 'pending' ? FS.subtabActive : {}) }}
-                    onClick={() => setMoreTab('pending')}
-                  >
-                    ממתין
-                  </button>
-                  <button
-                    style={{ ...FS.subtab, ...(moreTab === 'low' ? FS.subtabActive : {}) }}
-                    onClick={() => setMoreTab('low')}
-                  >
-                    תעדוף נמוך
-                  </button>
-                </div>
-              )}
               <div style={FS.searchRow}>
                 <input
                   style={FS.search}
@@ -524,7 +512,7 @@ export default function QuestPanel({
                               <span style={FS.statusBadge} data-status={getQuestDisplayStatus(q)}>
                                 {getQuestDisplayStatus(q) === 'New' ? '🔔 חדש' : getQuestStatusLabel(getQuestDisplayStatus(q))}
                               </span>
-                              {isLowPriorityQuest(q) && <span style={FS.priorityBadge}>⋯ תעדוף נמוך</span>}
+                              {isLowPriorityQuest(q) && <span style={FS.priorityBadge}> תעדוף נמוך</span>}
                             </td>
                           );
                         }
@@ -565,25 +553,18 @@ export default function QuestPanel({
                         <td style={{ ...FS.td, width: 140 }}>
                           <select
                             style={FS.select}
-                            value={q.status}
+                            value={normalizeQuestStatus(q.status) ?? q.status}
                             onClick={(e) => e.stopPropagation()}
                             onChange={async (e) => {
                               await setQuestStatus(q.id, e.target.value);
                               onRefresh();
                             }}
                           >
-                            {Object.entries({
-                              Open: 'פתוח',
-                              Taken: 'נלקח',
-                              'In Progress': 'בביצוע',
-                              ממתין: 'ממתין',
-                              Done: 'הושלם',
-                              Approved: 'מאושר',
-                              Stopped: 'הופסק',
-                              Cancelled: 'בוטל',
-                            }).map(([k, v]) =>
-                              <option key={k} value={k}>{v}</option>
-                            )}
+                            {QUEST_STATUS_OPTIONS.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
                           </select>
                         </td>
                       )}
@@ -609,60 +590,28 @@ export default function QuestPanel({
 
   // ── Normal panel view ─────────────────────────────────
   return (
-    <div style={S.panel}>
+    <div ref={panelRef} style={S.panel}>
 
       {/* ── View tabs ─────────────────────────────────── */}
       <div style={S.tabs}>
         {QUEST_VIEWS.map(v => {
-          const cnt = v.id === 'more'
-            ? quests.filter((q) => isMoreQuest(q)).length
-            : quests.filter((q) => !isMoreQuest(q) && v.statuses.includes(q.status)).length;
+          const cnt = questCountByView[v.id];
           return (
             <button
               key={v.id}
               style={{ ...S.tab, ...(view === v.id ? S.tabActive : {}) }}
+              title={v.label}
               onClick={() => {
                 setView(v.id);
-                if (v.id === 'more') {
-                  setMoreTab('new');
-                }
               }}
             >
-              {v.icon} {v.label}
-              {cnt > 0 && <span style={{ ...S.tabCount, ...(view === v.id ? S.tabCountActive : {}) }}>{cnt}</span>}
+              <span>{v.icon}</span>
+              {!compactTabs && <span>{v.label}</span>}
+              {!compactTabs && cnt > 0 && <span style={{ ...S.tabCount, ...(view === v.id ? S.tabCountActive : {}) }}>{cnt}</span>}
             </button>
           );
         })}
       </div>
-
-      {view === 'more' && (
-        <div style={S.moreTabs}>
-          <button
-            type="button"
-            style={{ ...S.moreTabButton, ...(moreTab === 'new' ? S.moreTabButtonActive : {}) }}
-            onClick={() => setMoreTab('new')}
-          >
-            חדשות
-            {newQuestCount > 0 && <span style={S.moreTabCount}>{newQuestCount}</span>}
-          </button>
-          <button
-            type="button"
-            style={{ ...S.moreTabButton, ...(moreTab === 'pending' ? S.moreTabButtonActive : {}) }}
-            onClick={() => setMoreTab('pending')}
-          >
-            ממתין
-            {pendingQuestCount > 0 && <span style={S.moreTabCount}>{pendingQuestCount}</span>}
-          </button>
-          <button
-            type="button"
-            style={{ ...S.moreTabButton, ...(moreTab === 'low' ? S.moreTabButtonActive : {}) }}
-            onClick={() => setMoreTab('low')}
-          >
-            תעדוף נמוך
-            {lowPriorityQuestCount > 0 && <span style={S.moreTabCount}>{lowPriorityQuestCount}</span>}
-          </button>
-        </div>
-      )}
 
       {/* ── Header ────────────────────────────────────── */}
       <div style={S.header}>
@@ -673,8 +622,7 @@ export default function QuestPanel({
             <button
               className="btn btn-ghost btn-sm"
               onClick={() => {
-                setView('more');
-                setMoreTab('new');
+                setView('new');
               }}
               title="משימות חדשות"
               style={newQuestCount > 0 ? S.bellButtonActive : undefined}
@@ -705,9 +653,12 @@ export default function QuestPanel({
               <select className="input" value={newFt} onChange={e => setNewFt(e.target.value as FtOption)} style={{ fontSize: 13, flex: 1 }}>
                 {FT_OPTIONS.map(ft => <option key={ft} value={ft}>{ft}</option>)}
               </select>
-              <select className="input" value={newStatus} onChange={e => setNewStatus(e.target.value as 'Open' | 'ממתין')} style={{ fontSize: 13, flex: 1 }}>
-                <option value="Open">פתוח</option>
-                <option value="ממתין">ממתין</option>
+              <select className="input" value={newStatus} onChange={e => setNewStatus(e.target.value)} style={{ fontSize: 13, flex: 1 }}>
+                {QUICK_CREATE_STATUS_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
               </select>
             </div>
             <div style={{ display: 'flex', gap: 6 }}>
@@ -843,7 +794,7 @@ export default function QuestPanel({
           >
             {listSortDir === 'asc' ? '↑' : '↓'}
           </button>
-          {isLeader && view !== 'more' && listSort === 'manual' && searchScope !== 'all' && (
+          {canPersistManualSort && listSort === 'manual' && searchScope !== 'all' && (
             <button
               className="btn btn-primary btn-sm"
               type="button"
@@ -914,8 +865,7 @@ export default function QuestPanel({
               type="button"
               style={S.notificationToast}
               onClick={() => {
-                setView('more');
-                setMoreTab('new');
+                setView('new');
                 setToastNotifications((current) => current.filter((entry) => entry.id !== notification.id));
               }}
             >

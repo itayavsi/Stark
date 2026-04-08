@@ -14,10 +14,32 @@ if str(PROJECT_BACKEND_DIR) not in sys.path:
 
 from services.db import get_connection  # noqa: E402
 
-VALID_STATUSES = {"Open", "Taken", "In Progress", "Done", "Approved", "Stopped", "Cancelled", "ממתין"}
+VALID_STATUSES = {
+    "Start",
+    "Search",
+    "Production",
+    "Solve",
+    "MBT_solve",
+    "Tiyuv",
+    "acc_test",
+    "Kilta",
+    "Paused",
+    "Finished",
+    "Ziyuah_mipuy",
+    "Klita_mipuy",
+    "MQA",
+    "BDB",
+    "QL",
+    "BDB_hold",
+    "need_ziyuah",
+    "hold_ziyuah",
+    "Snow_ziyuah",
+    "Need_Nezah",
+    "Approved_Nezah",
+}
 DEFAULT_GROUP = "לווינות"
 DEFAULT_FT = "FT1"
-DEFAULT_STATUS = "Done"
+DEFAULT_STATUS = "Finished"
 OPEN_QUESTS_TABLE = "open_quests"
 FINISHED_QUESTS_TABLE = "finished_quests"
 HEADER_ALIASES = {
@@ -243,7 +265,7 @@ def _quest_exists(cur: Any, quest: dict[str, Any]) -> bool:
 
 
 def _insert_quest(cur: Any, quest: dict[str, Any]) -> None:
-    target_table = FINISHED_QUESTS_TABLE if quest.get("status") in {"Done", "Approved"} else OPEN_QUESTS_TABLE
+    target_table = FINISHED_QUESTS_TABLE if quest.get("status") in {"Finished"} else OPEN_QUESTS_TABLE
     cur.execute(
         f"""
         INSERT INTO {target_table} (

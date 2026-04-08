@@ -25,7 +25,7 @@ from services.storage import (
 
 
 VALID_MATZIAH = {"N", "H", "M"}
-FINISHED_STATUSES = {"Done", "Approved"}
+FINISHED_STATUSES = {"Finished"}
 
 
 def _normalize_matziah(value: str | None, default: str) -> str:
@@ -43,11 +43,12 @@ def _build_local_quest_payload(data: dict, default_matziah: str = "H") -> dict:
         "id": str(uuid.uuid4()),
         "title": data.get("title", ""),
         "description": data.get("description", ""),
-        "status": data.get("status", "Open"),
+        "status": data.get("status", "Start"),
         "priority": data.get("priority", "רגיל"),
         "date": data.get("date") or today,
         "assigned_user": data.get("assigned_user"),
         "shapefile_path": data.get("shapefile_path"),
+        "model_simulations": data.get("model_simulations"),
         "model_folder": data.get("model_folder"),
         "group": data.get("group", "לווינות"),
         "year": data.get("year", datetime.now().year),
@@ -178,11 +179,11 @@ def transfer_external_quest_to_local(quest_id: str):
 
 
 def take_quest(quest_id: str, username: str):
-    return update_quest(quest_id, {"status": "Taken", "assigned_user": username})
+    return update_quest(quest_id, {"status": "Production", "assigned_user": username})
 
 
 def complete_quest(quest_id: str):
-    return update_quest_status(quest_id, "Done")
+    return update_quest_status(quest_id, "Finished")
 
 
 def update_quest_status(quest_id: str, status: str):
@@ -240,7 +241,18 @@ def update_quest_priority(quest_id: str, priority: str):
 
 
 def update_quest_fields(quest_id: str, fields: dict):
-    allowed_fields = {"title", "status", "priority", "assigned_user", "group", "year", "date", "notes", "model_folder"}
+    allowed_fields = {
+        "title",
+        "status",
+        "priority",
+        "assigned_user",
+        "group",
+        "year",
+        "date",
+        "notes",
+        "model_folder",
+        "model_simulations",
+    }
     update_data = {k: v for k, v in fields.items() if k in allowed_fields}
     if not update_data:
         return None

@@ -4,10 +4,54 @@ from pydantic import BaseModel
 
 FT_OPTIONS = ["FT1", "FT2", "FT3", "FT4", "FT5"]
 PRIORITY_OPTIONS = ["גבוה", "רגיל", "נמוך"]
-STATUS_OPTIONS = ["Open", "Taken", "In Progress", "Done", "Approved", "Stopped", "Cancelled", "ממתין"]
+STATUS_OPTIONS = [
+    "Start",
+    "Search",
+    "Production",
+    "Solve",
+    "MBT_solve",
+    "Tiyuv",
+    "acc_test",
+    "Kilta",
+    "Paused",
+    "Finished",
+    "Ziyuah_mipuy",
+    "Klita_mipuy",
+    "MQA",
+    "BDB",
+    "QL",
+    "BDB_hold",
+    "need_ziyuah",
+    "hold_ziyuah",
+    "Snow_ziyuah",
+    "Need_Nezah",
+    "Approved_Nezah",
+]
 MATZIAH_OPTIONS = ["N", "H", "M"]
 
-QuestStatus = Literal["Open", "Taken", "In Progress", "Done", "Approved", "Stopped", "Cancelled", "ממתין"]
+QuestStatus = Literal[
+    "Start",
+    "Search",
+    "Production",
+    "Solve",
+    "MBT_solve",
+    "Tiyuv",
+    "acc_test",
+    "Kilta",
+    "Paused",
+    "Finished",
+    "Ziyuah_mipuy",
+    "Klita_mipuy",
+    "MQA",
+    "BDB",
+    "QL",
+    "BDB_hold",
+    "need_ziyuah",
+    "hold_ziyuah",
+    "Snow_ziyuah",
+    "Need_Nezah",
+    "Approved_Nezah",
+]
 QuestPriority = Literal["גבוה", "רגיל", "נמוך"]
 MatziahOption = Literal["N", "H", "M"]
 
@@ -15,11 +59,12 @@ MatziahOption = Literal["N", "H", "M"]
 class QuestCreate(BaseModel):
     title: str
     description: Optional[str] = ""
-    status: Optional[QuestStatus | str] = "Open"
+    status: Optional[QuestStatus | str] = "Start"
     priority: Optional[QuestPriority | str] = "רגיל"
     date: Optional[str] = None
     assigned_user: Optional[str] = None
     shapefile_path: Optional[str] = None
+    model_simulations: Optional[str] = None
     model_folder: Optional[str] = None
     group: Optional[str] = "לווינות"
     year: Optional[int] = 2026
@@ -34,7 +79,7 @@ class QuestCreate(BaseModel):
 class ExternalQuestCreate(BaseModel):
     title: str
     description: Optional[str] = ""
-    status: Optional[QuestStatus | str] = "Open"
+    status: Optional[QuestStatus | str] = "Start"
     priority: Optional[QuestPriority | str] = "רגיל"
     date: Optional[str] = None
     assigned_user: Optional[str] = None

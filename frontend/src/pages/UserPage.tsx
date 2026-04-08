@@ -13,6 +13,7 @@ import { useAuth } from '../context/AuthContext';
 import { createUser, deleteUser, getQuests, getUsers, updateUser as updateUserApi } from '../services/api';
 import type { Quest, User, UserCreateInput, UserRole, UserUpdateInput } from '../types/domain';
 import { USER_CREATE_FIELDS, USER_EDIT_FIELDS } from '../config/userFields';
+import { isFinishedStatus } from '../utils/quests';
 
 const ROLE_LABELS: Record<UserRole, string> = {
   'Team Leader': 'מנהל צוות',
@@ -21,8 +22,6 @@ const ROLE_LABELS: Record<UserRole, string> = {
 };
 
 const ROLE_OPTIONS: UserRole[] = ['Team Leader', 'User', 'Viewer'];
-const ACTIVE_STATUSES = new Set(['Open', 'Taken', 'In Progress', 'ממתין']);
-const DONE_STATUSES = new Set(['Done', 'Approved']);
 
 interface UserEditState {
   display_name: string;
@@ -106,11 +105,11 @@ export default function UserPage() {
     [identitySet, quests]
   );
   const myActiveQuests = useMemo(
-    () => myQuests.filter((quest) => ACTIVE_STATUSES.has(String(quest.status))),
+    () => myQuests.filter((quest) => !isFinishedStatus(quest.status)),
     [myQuests]
   );
   const myDoneQuests = useMemo(
-    () => myQuests.filter((quest) => DONE_STATUSES.has(String(quest.status))),
+    () => myQuests.filter((quest) => isFinishedStatus(quest.status)),
     [myQuests]
   );
   const myHighPriorityQuests = useMemo(

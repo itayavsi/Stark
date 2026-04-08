@@ -569,7 +569,7 @@ def move_geometry_to_finished(quest_id: str, accuracy_xy: float, accuracy_z: flo
             moved = move_quest(
                 quest_id,
                 FINISHED_QUESTS_TABLE,
-                {"status": "Done"},
+                {"status": "Finished"},
             )
             if moved is None:
                 return None

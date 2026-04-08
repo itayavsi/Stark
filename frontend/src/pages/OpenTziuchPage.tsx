@@ -6,6 +6,7 @@ import ThemeToggle from '../components/ThemeToggle';
 import { useAuth } from '../context/AuthContext';
 import { addPendingQuestNotificationId } from '../lib/pendingQuestNotifications';
 import { createExternalQuest } from '../services/api';
+import { DEFAULT_STATUS } from '../utils/questOptions';
 
 function getToday() {
   return new Date().toISOString().slice(0, 10);
@@ -20,7 +21,7 @@ export default function OpenTziuchPage() {
       description: '',
       year: 2026,
       ft: 'FT1',
-      status: 'Open',
+      status: DEFAULT_STATUS,
       priority: 'רגיל',
       matziah: 'N',
       date: getToday(),
