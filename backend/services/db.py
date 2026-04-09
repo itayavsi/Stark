@@ -94,8 +94,9 @@ def init_db() -> None:
                     description TEXT NOT NULL DEFAULT '',
                     notes TEXT NOT NULL DEFAULT '',
                     status TEXT NOT NULL,
-                    "תעדוף" TEXT NOT NULL DEFAULT 'רגיל',
+                    "תעדוף" TEXT NOT NULL DEFAULT 'ב',
                     date TEXT NOT NULL,
+                    deadline_at TEXT NULL,
                     assigned_user TEXT NULL,
                     shapefile_path TEXT NULL,
                     model_simulations TEXT NULL,
@@ -114,8 +115,9 @@ def init_db() -> None:
                     description TEXT NOT NULL DEFAULT '',
                     notes TEXT NOT NULL DEFAULT '',
                     status TEXT NOT NULL,
-                    "תעדוף" TEXT NOT NULL DEFAULT 'רגיל',
+                    "תעדוף" TEXT NOT NULL DEFAULT 'ב',
                     date TEXT NOT NULL,
+                    deadline_at TEXT NULL,
                     assigned_user TEXT NULL,
                     shapefile_path TEXT NULL,
                     model_simulations TEXT NULL,
@@ -129,13 +131,25 @@ def init_db() -> None:
             cur.execute(
                 f"""
                 ALTER TABLE {OPEN_QUESTS_TABLE}
-                ADD COLUMN IF NOT EXISTS "תעדוף" TEXT NOT NULL DEFAULT 'רגיל';
+                ADD COLUMN IF NOT EXISTS "תעדוף" TEXT NOT NULL DEFAULT 'ב';
                 """
             )
             cur.execute(
                 f"""
                 ALTER TABLE {FINISHED_QUESTS_TABLE}
-                ADD COLUMN IF NOT EXISTS "תעדוף" TEXT NOT NULL DEFAULT 'רגיל';
+                ADD COLUMN IF NOT EXISTS "תעדוף" TEXT NOT NULL DEFAULT 'ב';
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {OPEN_QUESTS_TABLE}
+                ALTER COLUMN "תעדוף" SET DEFAULT 'ב';
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {FINISHED_QUESTS_TABLE}
+                ALTER COLUMN "תעדוף" SET DEFAULT 'ב';
                 """
             )
             cur.execute(
@@ -220,6 +234,36 @@ def init_db() -> None:
                 f"""
                 ALTER TABLE {FINISHED_QUESTS_TABLE}
                 ADD COLUMN IF NOT EXISTS model_folder TEXT NULL;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {OPEN_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS deadline_at TEXT NULL;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {FINISHED_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS deadline_at TEXT NULL;
+                """
+            )
+            cur.execute(
+                f"""
+                UPDATE {OPEN_QUESTS_TABLE}
+                SET deadline_at = date
+                WHERE deadline_at IS NULL
+                  AND "תעדוף" = 'deadline'
+                  AND POSITION('T' IN date) > 0;
+                """
+            )
+            cur.execute(
+                f"""
+                UPDATE {FINISHED_QUESTS_TABLE}
+                SET deadline_at = date
+                WHERE deadline_at IS NULL
+                  AND "תעדוף" = 'deadline'
+                  AND POSITION('T' IN date) > 0;
                 """
             )
             cur.execute(
@@ -471,7 +515,7 @@ def init_db() -> None:
             cur.execute(
                 f"""
                 INSERT INTO {FINISHED_QUESTS_TABLE} (
-                    id, title, description, status, "תעדוף", date, assigned_user,
+                    id, title, description, status, "תעדוף", date, deadline_at, assigned_user,
                     shapefile_path, model_simulations, model_folder, group_name, year, ft, "מצייח",
                     sync_external_id, sync_source, sync_name,
                     geometry_type, geometry_status, geometry_geojson, geometry_source_path,
@@ -481,7 +525,7 @@ def init_db() -> None:
                     geometry_point_feature_count, geometry_polygon_feature_count, geometry_updated_at
                 )
                 SELECT
-                    id, title, description, status, "תעדוף", date, assigned_user,
+                    id, title, description, status, "תעדוף", date, deadline_at, assigned_user,
                     shapefile_path, model_simulations, model_folder, group_name, year, ft, "מצייח",
                     sync_external_id, sync_source, sync_name,
                     geometry_type, geometry_status, geometry_geojson, geometry_source_path,
@@ -705,8 +749,9 @@ def init_db() -> None:
                             "title": quest.get("title", ""),
                             "description": quest.get("description", ""),
                             "status": quest.get("status", "Start"),
-                            "priority": quest.get("priority", "רגיל"),
+                            "priority": "ב" if quest.get("priority") is None else quest.get("priority"),
                             "date": _normalize_seed_date(quest.get("date")),
+                            "deadline_at": quest.get("deadline_at"),
                             "assigned_user": quest.get("assigned_user"),
                             "shapefile_path": quest.get("shapefile_path"),
                             "group_name": quest.get("group", "לווינות"),
@@ -722,11 +767,11 @@ def init_db() -> None:
                         cur.executemany(
                             f"""
                             INSERT INTO {OPEN_QUESTS_TABLE} (
-                                id, title, description, status, "תעדוף", date, assigned_user,
+                                id, title, description, status, "תעדוף", date, deadline_at, assigned_user,
                                 shapefile_path, group_name, year, ft
                             )
                             VALUES (
-                                %(id)s, %(title)s, %(description)s, %(status)s, %(priority)s, %(date)s, %(assigned_user)s,
+                                %(id)s, %(title)s, %(description)s, %(status)s, %(priority)s, %(date)s, %(deadline_at)s, %(assigned_user)s,
                                 %(shapefile_path)s, %(group_name)s, %(year)s, %(ft)s
                             )
                             ON CONFLICT (id) DO NOTHING;
@@ -738,11 +783,11 @@ def init_db() -> None:
                         cur.executemany(
                             f"""
                             INSERT INTO {FINISHED_QUESTS_TABLE} (
-                                id, title, description, status, "תעדוף", date, assigned_user,
+                                id, title, description, status, "תעדוף", date, deadline_at, assigned_user,
                                 shapefile_path, group_name, year, ft
                             )
                             VALUES (
-                                %(id)s, %(title)s, %(description)s, %(status)s, %(priority)s, %(date)s, %(assigned_user)s,
+                                %(id)s, %(title)s, %(description)s, %(status)s, %(priority)s, %(date)s, %(deadline_at)s, %(assigned_user)s,
                                 %(shapefile_path)s, %(group_name)s, %(year)s, %(ft)s
                             )
                             ON CONFLICT (id) DO NOTHING;

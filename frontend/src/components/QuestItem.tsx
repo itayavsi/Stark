@@ -11,6 +11,13 @@ import { ftColor } from '../services/ftConfig';
 import type { GeometryCatalog, Quest, QuestGeometryRecord, User } from '../types/domain';
 import { getQuestDisplayStatus, getQuestStatusLabel, getStatusCategory, isFinishedStatus, isLowPriorityQuest, isStartStatus } from '../utils/quests';
 import { QUEST_STATUS_OPTIONS } from '../config/questTableColumns';
+import {
+  DEFAULT_PRIORITY,
+  EXTERNAL_QUEST_PRIORITY_OPTIONS,
+  QUEST_PRIORITY_OPTIONS,
+  getPriorityLabel,
+  isDeadlinePriorityValue,
+} from '../utils/questOptions';
 import AccuracyModal from './AccuracyModal';
 import QuestGeometryEditor from './QuestGeometryEditor';
 
@@ -59,9 +66,15 @@ export default function QuestItem({
   };
   const ftClr = ftColor(quest.ft);
   const lowPriority = isLowPriorityQuest(quest);
+  const deadlinePriority = isDeadlinePriorityValue(quest.priority);
+  const deadlineSource = quest.deadline_at || (quest.date && String(quest.date).includes('T') ? quest.date : null);
+  const deadlineTag = deadlineSource
+    ? `עד ${String(deadlineSource).replace('T', ' ').slice(0, 16)}`
+    : 'עד ללא תאריך';
   const isExternalQuest = quest.id.startsWith('external:');
   const canTransferToOpen = isExternalQuest && !quest.isTransferred && !isViewer;
-  const matziahLabel = quest.matziah ? `מצייח ${quest.matziah}` : null;
+  const priorityOptions = isExternalQuest ? EXTERNAL_QUEST_PRIORITY_OPTIONS : QUEST_PRIORITY_OPTIONS;
+  const matziahValue = quest.matziah || '—';
   const getGeometryLabel = (types: typeof quest.geometry_type) => {
     if (!types) return 'No geometry';
     if (Array.isArray(types)) {
@@ -150,7 +163,7 @@ export default function QuestItem({
     setBusy(true);
     try {
       await setQuestPriority(quest.id, priority);
-      showMsg(`✓ תעדוף עודכן: ${priority}`, 'success');
+      showMsg(`✓ תעדוף עודכן: ${getPriorityLabel(priority)}`, 'success');
       await onRefresh();
     } catch {
       showMsg('✗ שגיאה בעדכון תעדוף', 'error');
@@ -321,7 +334,7 @@ export default function QuestItem({
         <div style={S.topLeft}>
           <span className={`badge ${status.cls}`}>{status.label}</span>
           {lowPriority && <span style={S.priorityBadge}> תעדוף נמוך</span>}
-          {matziahLabel && <span style={S.syncBadge}>{matziahLabel}</span>}
+          {deadlinePriority && <span style={S.deadlineBadge}>{deadlineTag}</span>}
           <span style={S.geometryBadge}>{geometryLabel}</span>
           {!quest.ft && quest.year && <span style={{ fontSize:11, color: ftClr, fontWeight:700 }}>{quest.year}</span>}
           {quest.ft && <span style={{ ...S.ftBadge, background: ftClr + '22', color: ftClr, border: `1px solid ${ftClr}55` }}>{quest.ft}</span>}
@@ -350,6 +363,11 @@ export default function QuestItem({
           />
 
           {quest.description && <p style={S.desc}>{quest.description}</p>}
+
+          <div style={S.infoRow}>
+            <span style={S.infoLabel}>מצייח:</span>
+            <span style={S.infoValue}>{matziahValue}</span>
+          </div>
           
           {/* Notes Section */}
           <div style={S.notesSection}>
@@ -525,14 +543,16 @@ export default function QuestItem({
               <span style={S.statusLabel}>תעדוף:</span>
               <select
                 style={S.select}
-                value={quest.priority || 'רגיל'}
+                value={quest.priority ?? DEFAULT_PRIORITY}
                 onChange={handlePriorityChange}
                 disabled={busy}
                 onClick={e => e.stopPropagation()}
               >
-                <option value="גבוה">גבוה</option>
-                <option value="רגיל">רגיל</option>
-                <option value="נמוך">נמוך</option>
+                {priorityOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
               </select>
             </div>
           )}
@@ -579,6 +599,21 @@ const S: Record<string, CSSProperties> = {
   metaItem: { fontSize:11, color:'var(--text2)' },
   expanded: { marginTop:10, borderTop:'1px solid var(--border)', paddingTop:10 },
   desc:     { fontSize:12, color:'var(--text2)', marginBottom:10, lineHeight:1.6 },
+  infoRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 10,
+    fontSize: 12,
+  },
+  infoLabel: {
+    color: 'var(--text3)',
+    fontWeight: 700,
+  },
+  infoValue: {
+    color: 'var(--text)',
+    fontWeight: 600,
+  },
   notesSection: { marginBottom: 10 },
   notesHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
   notesLabel: { fontSize: 11, color: 'var(--text3)', fontWeight: 600 },
@@ -653,14 +688,14 @@ const S: Record<string, CSSProperties> = {
     color: 'color-mix(in srgb, var(--orange) 76%, var(--text))',
     border: '1px solid color-mix(in srgb, var(--orange) 32%, var(--border))',
   },
-  syncBadge: {
+  deadlineBadge: {
     fontSize: 10,
     fontWeight: 700,
     padding: '2px 8px',
     borderRadius: 20,
-    background: 'rgba(79,127,255,0.12)',
-    color: 'var(--accent)',
-    border: '1px solid rgba(79,127,255,0.28)',
+    background: 'color-mix(in srgb, var(--accent) 16%, var(--surface))',
+    color: 'color-mix(in srgb, var(--accent) 78%, var(--text))',
+    border: '1px solid color-mix(in srgb, var(--accent) 32%, var(--border))',
   },
   syncHint: {
     fontSize: 11,

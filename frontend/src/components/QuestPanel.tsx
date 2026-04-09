@@ -12,7 +12,7 @@ import { getStoredQuestSortOrder, saveStoredQuestSortOrder } from '../lib/questS
 import { createQuest, setQuestStatus } from '../services/api';
 import { FT_OPTIONS, ftColor } from '../services/ftConfig';
 import type { FtOption, GeometryCatalog, LngLatPoint, Quest } from '../types/domain';
-import { parseUTM } from '../utils/geo';
+import { parseD, parseDD, parseDMS, parseUTM } from '../utils/geo';
 import {
   QUEST_SORT_OPTIONS,
   QUEST_VIEWS,
@@ -35,7 +35,13 @@ import {
   type QuestPanelColumnKey,
 } from '../config/questTableColumns';
 import { filterQuests } from '../utils/quests';
-import { DEFAULT_STATUS, QUICK_CREATE_STATUS_OPTIONS } from '../utils/questOptions';
+import {
+  DEFAULT_PRIORITY,
+  DEFAULT_STATUS,
+  QUICK_CREATE_STATUS_OPTIONS,
+  QUEST_PRIORITY_OPTIONS,
+  isDeadlinePriorityValue,
+} from '../utils/questOptions';
 import QuestItem from './QuestItem';
 
 interface QuestPanelProps {
@@ -69,9 +75,11 @@ export default function QuestPanel({
   const [newYear, setNewYear] = useState(2026);
   const [newFt, setNewFt] = useState<FtOption>('FT1');
   const [newStatus, setNewStatus] = useState<string>(DEFAULT_STATUS);
-  const [newPriority, setNewPriority] = useState<'גבוה' | 'רגיל' | 'נמוך'>('רגיל');
+  const [newPriority, setNewPriority] = useState<string>(DEFAULT_PRIORITY);
+  const [newPriorityDeadlineAt, setNewPriorityDeadlineAt] = useState('');
   const [showJump, setShowJump] = useState(false);
-  const [jumpMode, setJumpMode] = useState<'utm' | 'dd'>('utm');
+  const [jumpMode, setJumpMode] = useState<'utm' | 'dd' | 'd' | 'dms'>('utm');
+  const [showMoreJumpFormats, setShowMoreJumpFormats] = useState(false);
   const [jumpLat, setJumpLat] = useState('');
   const [jumpLng, setJumpLng] = useState('');
   const [jumpUtm, setJumpUtm] = useState('');
@@ -102,7 +110,7 @@ export default function QuestPanel({
   const canPersistManualSort = isLeader && sortableViews.includes(view);
   const currentView = getQuestView(view);
   const currentGroup = user?.group || 'לווינות';
-  const newQuestCount = useMemo(() => quests.filter((quest) => quest.isNew).length, [quests]);
+  const newQuestCount = useMemo(() => filterQuests(quests, 'new', '', 'current').length, [quests]);
   const filteredBase = useMemo(
     () => filterQuests(quests, view, search, searchScope),
     [quests, view, search, searchScope]
@@ -312,6 +320,10 @@ export default function QuestPanel({
     if (!newTitle.trim()) {
       return;
     }
+    if (isDeadlinePriorityValue(newPriority) && !newPriorityDeadlineAt) {
+      alert('לתעדוף זמן מוגדר יש להזין תאריך ושעה');
+      return;
+    }
 
     setCreating(true);
     try {
@@ -320,6 +332,7 @@ export default function QuestPanel({
         description: newDesc,
         status: newStatus,
         priority: newPriority,
+        deadline_at: isDeadlinePriorityValue(newPriority) ? newPriorityDeadlineAt : undefined,
         year: newYear,
         ft: newFt,
         quest_type: newFt,
@@ -330,7 +343,8 @@ export default function QuestPanel({
       setNewYear(2026);
       setNewFt('FT1');
       setNewStatus(DEFAULT_STATUS);
-      setNewPriority('רגיל');
+      setNewPriority(DEFAULT_PRIORITY);
+      setNewPriorityDeadlineAt('');
       setShowNew(false);
       await onRefresh();
     } catch {
@@ -345,6 +359,11 @@ export default function QuestPanel({
     if (column === 'status') return getQuestStatusLabel(getQuestDisplayStatus(quest));
     const value = quest[column as keyof Quest];
     return value ?? '';
+  };
+
+  const getDeadlineTagLabel = (deadlineAtValue: string | undefined | null) => {
+    if (!deadlineAtValue) return 'עד ללא תאריך';
+    return `עד ${deadlineAtValue.replace('T', ' ').slice(0, 16)}`;
   };
 
   const exportCSV = () => {
@@ -376,16 +395,18 @@ export default function QuestPanel({
       return;
     }
 
-    const lat = Number(jumpLat.trim());
-    const lng = Number(jumpLng.trim());
+    const parser = jumpMode === 'd' ? parseD : jumpMode === 'dms' ? parseDMS : parseDD;
+    const lat = parser(jumpLat.trim(), 'lat');
+    const lng = parser(jumpLng.trim(), 'lng');
 
-    if (Number.isNaN(lat) || Number.isNaN(lng)) {
-      setJumpError('יש להזין קו רוחב וקו אורך במספרים');
-      return;
-    }
-
-    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-      setJumpError('קו רוחב חייב להיות בין 90- ל-90 וקו אורך בין 180- ל-180');
+    if (lat === null || lng === null) {
+      setJumpError(
+        jumpMode === 'dd'
+          ? 'יש להזין קו רוחב וקו אורך בפורמט DD (למשל 31.778, 35.235)'
+          : jumpMode === 'd'
+            ? "יש להזין בפורמט D (למשל 31 46.680 N)"
+            : 'יש להזין בפורמט DMS (למשל 31 46 40 N)'
+      );
       return;
     }
 
@@ -513,6 +534,11 @@ export default function QuestPanel({
                                 {getQuestDisplayStatus(q) === 'New' ? '🔔 חדש' : getQuestStatusLabel(getQuestDisplayStatus(q))}
                               </span>
                               {isLowPriorityQuest(q) && <span style={FS.priorityBadge}> תעדוף נמוך</span>}
+                              {isDeadlinePriorityValue(q.priority) && (
+                                <span style={FS.deadlineBadge}>
+                                  {getDeadlineTagLabel(q.deadline_at || (q.date && q.date.includes('T') ? q.date : undefined))}
+                                </span>
+                              )}
                             </td>
                           );
                         }
@@ -662,15 +688,38 @@ export default function QuestPanel({
               </select>
             </div>
             <div style={{ display: 'flex', gap: 6 }}>
-              <select className="input" value={newPriority} onChange={e => setNewPriority(e.target.value as 'גבוה' | 'רגיל' | 'נמוך')} style={{ fontSize: 13, flex: 1 }}>
-                <option value="גבוה">תעדוף גבוה</option>
-                <option value="רגיל">תעדוף רגיל</option>
-                <option value="נמוך">תעדוף נמוך</option>
+              <select
+                className="input"
+                value={newPriority}
+                onChange={e => {
+                  const nextPriority = e.target.value;
+                  setNewPriority(nextPriority);
+                  if (!isDeadlinePriorityValue(nextPriority)) {
+                    setNewPriorityDeadlineAt('');
+                  }
+                }}
+                style={{ fontSize: 13, flex: 1 }}
+              >
+                {QUEST_PRIORITY_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
               </select>
               <button className="btn btn-primary" type="submit" disabled={creating || !newTitle.trim()}>
                 {creating ? '...' : 'צור'}
               </button>
             </div>
+            {isDeadlinePriorityValue(newPriority) && (
+              <input
+                className="input"
+                type="datetime-local"
+                value={newPriorityDeadlineAt}
+                onChange={(e) => setNewPriorityDeadlineAt(e.target.value)}
+                style={{ fontSize: 13 }}
+                required
+              />
+            )}
           </form>
         )}
 
@@ -700,6 +749,49 @@ export default function QuestPanel({
               >
                 DD
               </button>
+              <button
+                className="btn btn-ghost btn-sm"
+                type="button"
+                onClick={() => {
+                  setShowMoreJumpFormats((current) => {
+                    const next = !current;
+                    if (!next && (jumpMode === 'd' || jumpMode === 'dms')) {
+                      setJumpMode('dd');
+                    }
+                    return next;
+                  });
+                  setJumpError('');
+                }}
+                style={showMoreJumpFormats ? S.jumpModeActive : undefined}
+              >
+                עוד פורמטים
+              </button>
+              {showMoreJumpFormats && (
+                <>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    type="button"
+                    onClick={() => {
+                      setJumpMode('d');
+                      setJumpError('');
+                    }}
+                    style={jumpMode === 'd' ? S.jumpModeActive : undefined}
+                  >
+                    D
+                  </button>
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    type="button"
+                    onClick={() => {
+                      setJumpMode('dms');
+                      setJumpError('');
+                    }}
+                    style={jumpMode === 'dms' ? S.jumpModeActive : undefined}
+                  >
+                    DMS
+                  </button>
+                </>
+              )}
             </div>
             {jumpMode === 'utm' ? (
               <input
@@ -718,7 +810,13 @@ export default function QuestPanel({
               <div style={S.jumpRow}>
                 <input
                   className="input"
-                  placeholder="קו רוחב / Latitude"
+                  placeholder={
+                    jumpMode === 'dd'
+                      ? 'Latitude DD (31.778)'
+                      : jumpMode === 'd'
+                        ? "Latitude D (31 46.680 N)"
+                        : 'Latitude DMS (31 46 40 N)'
+                  }
                   value={jumpLat}
                   onChange={(event) => {
                     setJumpLat(event.target.value);
@@ -730,7 +828,13 @@ export default function QuestPanel({
                 />
                 <input
                   className="input"
-                  placeholder="קו אורך / Longitude"
+                  placeholder={
+                    jumpMode === 'dd'
+                      ? 'Longitude DD (35.235)'
+                      : jumpMode === 'd'
+                        ? "Longitude D (35 14.100 E)"
+                        : 'Longitude DMS (35 14 06 E)'
+                  }
                   value={jumpLng}
                   onChange={(event) => {
                     setJumpLng(event.target.value);
@@ -744,7 +848,13 @@ export default function QuestPanel({
             )}
             <div style={S.jumpActions}>
               <div style={S.jumpHint}>
-                {jumpMode === 'utm' ? 'ברירת מחדל: UTM. אפשר לעבור ל-DD אם צריך' : 'דוגמה ל-DD: 31.778, 35.235'}
+                {jumpMode === 'utm'
+                  ? 'ברירת מחדל: UTM. אפשר לעבור ל-DD / D / DMS אם צריך'
+                  : jumpMode === 'dd'
+                    ? 'דוגמה DD: 31.778 , 35.235'
+                    : jumpMode === 'd'
+                      ? "דוגמה D: 31 46.680 N , 35 14.100 E"
+                      : 'דוגמה DMS: 31 46 40 N , 35 14 06 E'}
               </div>
               <button className="btn btn-primary btn-sm" type="submit">
                 📍 הצג על המפה
@@ -1115,6 +1225,17 @@ const FS: Record<string, CSSProperties> = {
     background:'color-mix(in srgb, var(--orange) 14%, var(--surface))',
     color:'color-mix(in srgb, var(--orange) 76%, var(--text))',
     border:'1px solid color-mix(in srgb, var(--orange) 32%, var(--border))',
+  },
+  deadlineBadge: {
+    display:'inline-flex',
+    marginInlineStart:8,
+    fontSize:10,
+    fontWeight:700,
+    padding:'2px 8px',
+    borderRadius:20,
+    background:'color-mix(in srgb, var(--accent) 16%, var(--surface))',
+    color:'color-mix(in srgb, var(--accent) 78%, var(--text))',
+    border:'1px solid color-mix(in srgb, var(--accent) 32%, var(--border))',
   },
   select: {
     fontSize:11, padding:'3px 6px',

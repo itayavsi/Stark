@@ -165,6 +165,123 @@ export function formatDMS(point: LngLatPoint): string {
   return `${lat.degrees}deg ${pad(lat.minutes)}' ${lat.seconds.toFixed(2)}" ${hemisphere(point.lat, 'N', 'S')}, ${lng.degrees}deg ${pad(lng.minutes)}' ${lng.seconds.toFixed(2)}" ${hemisphere(point.lng, 'E', 'W')}`;
 }
 
+type CoordinateAxis = 'lat' | 'lng';
+
+function isHemisphereValidForAxis(axis: CoordinateAxis, hemisphereValue: string): boolean {
+  const h = hemisphereValue.toUpperCase();
+  return axis === 'lat' ? h === 'N' || h === 'S' : h === 'E' || h === 'W';
+}
+
+function applyHemisphere(value: number, hemisphereValue?: string): number | null {
+  if (!hemisphereValue) {
+    return value;
+  }
+  const h = hemisphereValue.toUpperCase();
+  const absValue = Math.abs(value);
+  if (h === 'N' || h === 'E') return absValue;
+  if (h === 'S' || h === 'W') return -absValue;
+  return null;
+}
+
+function isAxisValueValid(axis: CoordinateAxis, value: number): boolean {
+  if (!Number.isFinite(value)) return false;
+  if (axis === 'lat') return value >= -90 && value <= 90;
+  return value >= -180 && value <= 180;
+}
+
+export function parseDD(value: string, axis: CoordinateAxis): number | null {
+  const match = value.trim().toUpperCase().match(/^([+-]?\d+(?:\.\d+)?)\s*([NSEW])?$/);
+  if (!match) {
+    return null;
+  }
+
+  const raw = Number(match[1]);
+  const hemisphereValue = match[2];
+  if (!Number.isFinite(raw)) {
+    return null;
+  }
+  if (hemisphereValue && !isHemisphereValidForAxis(axis, hemisphereValue)) {
+    return null;
+  }
+
+  const normalized = applyHemisphere(raw, hemisphereValue);
+  if (normalized === null || !isAxisValueValid(axis, normalized)) {
+    return null;
+  }
+  return normalized;
+}
+
+export function parseD(value: string, axis: CoordinateAxis): number | null {
+  const match = value
+    .trim()
+    .toUpperCase()
+    .match(/^([+-]?\d+(?:\.\d+)?)\D+(\d+(?:\.\d+)?)\D*([NSEW])?$/);
+
+  if (!match) {
+    return null;
+  }
+
+  const degrees = Number(match[1]);
+  const minutes = Number(match[2]);
+  const hemisphereValue = match[3];
+
+  if (!Number.isFinite(degrees) || !Number.isFinite(minutes) || minutes < 0 || minutes >= 60) {
+    return null;
+  }
+  if (hemisphereValue && !isHemisphereValidForAxis(axis, hemisphereValue)) {
+    return null;
+  }
+
+  const sign = degrees < 0 ? -1 : 1;
+  const decimal = (Math.abs(degrees) + minutes / 60) * sign;
+  const normalized = applyHemisphere(decimal, hemisphereValue);
+
+  if (normalized === null || !isAxisValueValid(axis, normalized)) {
+    return null;
+  }
+  return normalized;
+}
+
+export function parseDMS(value: string, axis: CoordinateAxis): number | null {
+  const match = value
+    .trim()
+    .toUpperCase()
+    .match(/^([+-]?\d+(?:\.\d+)?)\D+(\d+(?:\.\d+)?)\D+(\d+(?:\.\d+)?)\D*([NSEW])?$/);
+
+  if (!match) {
+    return null;
+  }
+
+  const degrees = Number(match[1]);
+  const minutes = Number(match[2]);
+  const seconds = Number(match[3]);
+  const hemisphereValue = match[4];
+
+  if (
+    !Number.isFinite(degrees) ||
+    !Number.isFinite(minutes) ||
+    !Number.isFinite(seconds) ||
+    minutes < 0 ||
+    minutes >= 60 ||
+    seconds < 0 ||
+    seconds >= 60
+  ) {
+    return null;
+  }
+  if (hemisphereValue && !isHemisphereValidForAxis(axis, hemisphereValue)) {
+    return null;
+  }
+
+  const sign = degrees < 0 ? -1 : 1;
+  const decimal = (Math.abs(degrees) + minutes / 60 + seconds / 3600) * sign;
+  const normalized = applyHemisphere(decimal, hemisphereValue);
+
+  if (normalized === null || !isAxisValueValid(axis, normalized)) {
+    return null;
+  }
+  return normalized;
+}
+
 function getLatitudeBand(lat: number): string {
   const clamped = Math.max(-80, Math.min(84, lat));
   const index = Math.min(LAT_BANDS.length - 1, Math.floor((clamped + 80) / 8));

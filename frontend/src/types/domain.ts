@@ -46,9 +46,9 @@ export type QuestStatus =
   | 'Need_Nezah'
   | 'Approved_Nezah';
 
-export type QuestPriority = 'גבוה' | 'רגיל' | 'נמוך';
+export type QuestPriority = 'א+' | 'א' | 'ב' | 'ג' | 'ד' | 'ה' | 'deadline';
 
-export type FtOption = 'FT1' | 'FT2' | 'FT3' | 'FT4' | 'FT5';
+export type FtOption = string;
 
 export type MatziahOption = 'N' | 'H' | 'M';
 export type GeometryType = 'point' | 'polygon';
@@ -65,6 +65,7 @@ export interface Quest {
   priority?: QuestPriority | string;
   isNew?: boolean;
   date?: string;
+  deadline_at?: string | null;
   assigned_user?: string;
   year?: number;
   group?: string;
@@ -101,6 +102,7 @@ export interface CreateQuestInput {
   status?: QuestStatus | string;
   priority?: QuestPriority | string;
   date?: string;
+  deadline_at?: string | null;
   assigned_user?: string;
   year?: number;
   ft?: FtOption | string;
@@ -121,6 +123,7 @@ export interface CreateExternalQuestInput {
   status?: QuestStatus | string;
   priority?: QuestPriority | string;
   date?: string;
+  deadline_at?: string | null;
   assigned_user?: string;
   year?: number;
   ft?: FtOption | string;
@@ -159,6 +162,7 @@ export interface QuestGeometryRecord {
   status: QuestStatus | string;
   priority?: QuestPriority | string;
   date?: string;
+  deadline_at?: string | null;
   assigned_user?: string | null;
   group?: string;
   year?: number;

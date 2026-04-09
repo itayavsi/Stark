@@ -13,11 +13,48 @@ export const QUICK_CREATE_STATUS_OPTIONS: QuestStatusOption[] = QUEST_STATUS_OPT
 
 export const DEFAULT_STATUS = DEFAULT_QUEST_STATUS;
 
+export const DEFAULT_PRIORITY: QuestPriority = 'ב';
+
 export const QUEST_PRIORITY_OPTIONS: Array<{ value: QuestPriority | string; label: string }> = [
-  { value: 'גבוה', label: 'תעדוף גבוה' },
-  { value: 'רגיל', label: 'תעדוף רגיל' },
-  { value: 'נמוך', label: 'תעדוף נמוך' },
+  { value: 'א+', label: 'א+' },
+  { value: 'א', label: 'א' },
+  { value: 'ב', label: 'ב' },
+  { value: 'ג', label: 'ג' },
+  { value: 'ד', label: 'ד' },
+  { value: 'ה', label: 'ה' },
+  { value: 'deadline', label: 'זמן מוגדר' },
 ];
+
+export const EXTERNAL_QUEST_PRIORITY_OPTIONS: Array<{ value: QuestPriority | string; label: string }> = [
+  { value: '', label: 'ללא תעדוף' },
+  ...QUEST_PRIORITY_OPTIONS,
+];
+
+export function getPriorityLabel(priority: string | undefined): string {
+  const normalized = String(priority || '').trim();
+  if (!normalized) return 'ללא תעדוף';
+  return QUEST_PRIORITY_OPTIONS.find((option) => option.value === normalized)?.label || normalized;
+}
+
+export function isHighPriorityValue(priority: string | undefined): boolean {
+  const normalized = String(priority || '').trim();
+  return normalized === 'א+' || normalized === 'א' || normalized === 'גבוה';
+}
+
+export function isLowPriorityValue(priority: string | undefined): boolean {
+  const normalized = String(priority || '').trim().toLowerCase();
+  return (
+    normalized === 'ד' ||
+    normalized === 'ה' ||
+    normalized === 'נמוך' ||
+    normalized === 'low' ||
+    normalized === 'low priority'
+  );
+}
+
+export function isDeadlinePriorityValue(priority: string | undefined): boolean {
+  return String(priority || '').trim() === 'deadline';
+}
 
 export const MATZIAH_OPTIONS: Array<{ value: MatziahOption; label: string; hint: string }> = [
   { value: 'N', label: 'N', hint: 'מסנכרן סטטוס מול המשימה החיצונית' },

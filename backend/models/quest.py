@@ -3,7 +3,7 @@ from typing import Literal, Optional
 from pydantic import BaseModel
 
 FT_OPTIONS = ["FT1", "FT2", "FT3", "FT4", "FT5"]
-PRIORITY_OPTIONS = ["גבוה", "רגיל", "נמוך"]
+PRIORITY_OPTIONS = ["א+", "א", "ב", "ג", "ד", "ה", "deadline"]
 STATUS_OPTIONS = [
     "Start",
     "Search",
@@ -52,7 +52,7 @@ QuestStatus = Literal[
     "Need_Nezah",
     "Approved_Nezah",
 ]
-QuestPriority = Literal["גבוה", "רגיל", "נמוך"]
+QuestPriority = Literal["א+", "א", "ב", "ג", "ד", "ה", "deadline"]
 MatziahOption = Literal["N", "H", "M"]
 
 
@@ -60,8 +60,9 @@ class QuestCreate(BaseModel):
     title: str
     description: Optional[str] = ""
     status: Optional[QuestStatus | str] = "Start"
-    priority: Optional[QuestPriority | str] = "רגיל"
+    priority: Optional[QuestPriority | str] = "ב"
     date: Optional[str] = None
+    deadline_at: Optional[str] = None
     assigned_user: Optional[str] = None
     shapefile_path: Optional[str] = None
     model_simulations: Optional[str] = None
@@ -80,8 +81,9 @@ class ExternalQuestCreate(BaseModel):
     title: str
     description: Optional[str] = ""
     status: Optional[QuestStatus | str] = "Start"
-    priority: Optional[QuestPriority | str] = "רגיל"
+    priority: Optional[QuestPriority | str] = None
     date: Optional[str] = None
+    deadline_at: Optional[str] = None
     assigned_user: Optional[str] = None
     group: Optional[str] = "לווינות"
     year: Optional[int] = 2026

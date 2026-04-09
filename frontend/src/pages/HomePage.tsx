@@ -8,7 +8,7 @@ import QuestPanel from '../components/QuestPanel';
 import { useQuests } from '../hooks/useQuests';
 import { deleteQuestPointGeometry, deleteQuestPolygonGeometry, getFinishedGeometryCatalog, getGeometryCatalog, saveQuestPointGeometry, updateQuest, uploadQuestPointsGeometry, uploadQuestPolygonGeometry } from '../services/api';
 import { getFeaturePoint, getQuestGeometryBounds } from '../utils/geo';
-import { isFinishedStatus } from '../utils/quests';
+import { isFinishedStatus, isLowPriorityQuest, isOpenViewQuest, isPausedStatus } from '../utils/quests';
 import type { GeometryCatalog, IdentifiedFeature, IdentifyResults, LayerFilters, LngLatPoint, MapBounds, Quest } from '../types/domain';
 
 const MIN_WIDTH = 220;
@@ -52,7 +52,7 @@ export default function HomePage() {
     showPolygons: false,
     questTypes: {},
   });
-  const [tableViewMode, setTableViewMode] = useState<'all' | 'active' | 'finished'>('all');
+  const [tableViewMode, setTableViewMode] = useState<'all' | 'open' | 'paused' | 'low' | 'finished'>('all');
   const [identifyResults, setIdentifyResults] = useState<IdentifyResults | null>(null);
   const [selectedIdentifyFeatureId, setSelectedIdentifyFeatureId] = useState<string | number | null>(null);
 
@@ -67,15 +67,22 @@ export default function HomePage() {
   const tableOpen = layerFilters.showPoints || layerFilters.showPolygons;
 
   const filteredGeometryCatalog = useMemo(() => {
-    const activeIds = new Set(localQuests.map((q) => q.id));
+    const openIds = new Set(localQuests.filter((quest) => isOpenViewQuest(quest)).map((q) => q.id));
+    const pausedIds = new Set(localQuests.filter((quest) => isPausedStatus(quest.status)).map((q) => q.id));
+    const lowIds = new Set(localQuests.filter((quest) => isLowPriorityQuest(quest)).map((q) => q.id));
     const finishedIds = new Set(finishedQuests.map((q) => q.id));
 
     const filterFeatures = (features: GeometryCatalog['points']['features']) => {
       if (tableViewMode === 'all') return features;
-      if (tableViewMode === 'active') {
-        return features.filter((f) => activeIds.has(String(f.properties?.quest_id)));
+      if (tableViewMode === 'finished') {
+        return features.filter((f) => finishedIds.has(String(f.properties?.quest_id)));
       }
-      return features.filter((f) => finishedIds.has(String(f.properties?.quest_id)));
+      const questIds = tableViewMode === 'open'
+        ? openIds
+        : tableViewMode === 'paused'
+          ? pausedIds
+          : lowIds;
+      return features.filter((f) => questIds.has(String(f.properties?.quest_id)));
     };
 
     return {
@@ -83,7 +90,7 @@ export default function HomePage() {
       points: { ...geometryCatalog.points, features: filterFeatures(geometryCatalog.points.features) },
       polygons: { ...geometryCatalog.polygons, features: filterFeatures(geometryCatalog.polygons.features) },
     };
-  }, [geometryCatalog, localQuests, finishedQuests, tableViewMode]);
+  }, [finishedQuests, geometryCatalog, localQuests, tableViewMode]);
 
   const loadGeometryCatalog = useCallback(async () => {
     try {
@@ -212,8 +219,20 @@ export default function HomePage() {
   }, []);
 
   const handleUpdateQuest = useCallback(async (quest: Quest) => {
-    const { id, title, status, priority, assigned_user, group, year, date, notes, model_folder, model_simulations } = quest;
-    await updateQuest(id, { title, status, priority, assigned_user, group, year, date, notes, model_folder, model_simulations });
+    const { id, title, status, priority, assigned_user, group, year, date, deadline_at, notes, model_folder, model_simulations } = quest;
+    await updateQuest(id, {
+      title,
+      status,
+      priority,
+      assigned_user,
+      group,
+      year,
+      date,
+      deadline_at,
+      notes,
+      model_folder,
+      model_simulations,
+    });
     await refresh();
     await loadGeometryCatalog();
   }, [refresh, loadGeometryCatalog]);

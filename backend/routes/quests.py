@@ -96,7 +96,7 @@ def set_status(quest_id: str, status: str = Body(..., embed=True)):
 @router.patch("/{quest_id}/priority")
 def set_priority(quest_id: str, priority: str = Body(..., embed=True)):
     valid = set(PRIORITY_OPTIONS)
-    if priority not in valid:
+    if priority not in valid and priority != "":
         raise HTTPException(status_code=400, detail="Invalid priority")
     result = update_quest_priority(quest_id, priority)
     if not result:

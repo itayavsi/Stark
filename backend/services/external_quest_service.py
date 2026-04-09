@@ -74,11 +74,14 @@ def build_external_id(item: dict[str, Any]) -> str:
 def _normalize_date(raw_date: Any) -> str:
     if not raw_date:
         return datetime.now().strftime("%Y-%m-%d")
-
     text = str(raw_date)
-    if "T" in text:
-        return text.split("T", 1)[0]
-    return text
+    return text.split("T", 1)[0]
+
+
+def _normalize_deadline(raw_deadline: Any) -> str | None:
+    if raw_deadline in (None, ""):
+        return None
+    return str(raw_deadline)
 
 
 def _extract_year(date_text: str) -> int:
@@ -103,6 +106,12 @@ def transform_external_quest_with_metadata(
 ) -> dict[str, Any]:
     metadata = metadata or {}
     date_text = _normalize_date(item.get("relevancy:Date"))
+    deadline_at = _normalize_deadline(
+        metadata.get("deadline_at")
+        or item.get("deadline_at")
+        or item.get("deadlineAt")
+        or item.get("deadline")
+    )
     external_status = str(item.get("status", "Open"))
     local_status = status_override or EXTERNAL_STATUS_TO_LOCAL.get(external_status, external_status)
     external_id = build_external_id(item)
@@ -125,8 +134,9 @@ def transform_external_quest_with_metadata(
         "title": str(item.get("name", "") or "External quest"),
         "description": " | ".join(extra_bits),
         "status": local_status,
-        "priority": str(priority) if priority not in (None, "") else "רגיל",
+        "priority": str(priority) if priority not in (None, "") else "",
         "date": date_text,
+        "deadline_at": deadline_at,
         "assigned_user": str(item.get("opener", "") or "") or None,
         "shapefile_path": None,
         "group": str(item.get("group", EXTERNAL_QUESTS_GROUP) or EXTERNAL_QUESTS_GROUP),
@@ -198,14 +208,16 @@ def find_external_quest_by_signature(name: str, opener: str, date_text: str) -> 
 
 def build_external_quest_payload(data: dict[str, Any]) -> dict[str, Any]:
     date_text = _normalize_date(data.get("date"))
+    deadline_at = _normalize_deadline(data.get("deadline_at"))
     local_status = str(data.get("status") or "Start")
     quest_type = str(data.get("quest_type") or data.get("ft", "FT1") or "FT1")
     return {
         "name": str(data.get("title", "")).strip(),
         "notes": str(data.get("description", "") or ""),
         "status": map_local_status_to_external(local_status),
-        "priority": str(data.get("priority", "רגיל") or "רגיל"),
+        "priority": str(data.get("priority", "") or ""),
         "relevancy:Date": date_text,
+        "deadline_at": deadline_at,
         "opener": str(data.get("assigned_user", "") or ""),
         "group": str(data.get("group", EXTERNAL_QUESTS_GROUP) or EXTERNAL_QUESTS_GROUP),
         "year": data.get("year") or _extract_year(date_text),

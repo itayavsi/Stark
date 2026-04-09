@@ -11,6 +11,7 @@ from services.external_quest_service import (
     transform_external_quest_with_metadata,
 )
 from services.storage import (
+    delete_external_quest,
     get_external_quest,
     get_finished_quests,
     get_quest_by_sync_external_id,
@@ -39,13 +40,23 @@ def _build_local_quest_payload(data: dict, default_matziah: str = "H") -> dict:
     today = datetime.now().strftime("%Y-%m-%d")
     sync_external_id = data.get("sync_external_id")
     quest_type = data.get("quest_type") or data.get("ft") or "FT1"
+    raw_priority = data.get("priority")
+    raw_deadline_at = data.get("deadline_at")
+    raw_date = data.get("date")
+    deadline_at = raw_deadline_at
+    if deadline_at in (None, "") and data.get("priority") == "deadline" and isinstance(raw_date, str) and "T" in raw_date:
+        deadline_at = raw_date
+    normalized_date = raw_date or today
+    if isinstance(normalized_date, str) and "T" in normalized_date:
+        normalized_date = normalized_date.split("T", 1)[0]
     quest = {
         "id": str(uuid.uuid4()),
         "title": data.get("title", ""),
         "description": data.get("description", ""),
         "status": data.get("status", "Start"),
-        "priority": data.get("priority", "רגיל"),
-        "date": data.get("date") or today,
+        "priority": "ב" if raw_priority is None else raw_priority,
+        "date": normalized_date,
+        "deadline_at": deadline_at,
         "assigned_user": data.get("assigned_user"),
         "shapefile_path": data.get("shapefile_path"),
         "model_simulations": data.get("model_simulations"),
@@ -139,6 +150,7 @@ def transfer_external_quest_to_local(quest_id: str):
                 local_status=stored_external.get("local_status"),
                 transferred_quest_id=existing_local_quest["id"],
             )
+            delete_external_quest(quest_id)
         return existing_local_quest
 
     external_quest = find_external_quest(quest_id)
@@ -158,6 +170,7 @@ def transfer_external_quest_to_local(quest_id: str):
             "status": transformed_external["status"],
             "priority": transformed_external["priority"],
             "date": transformed_external["date"],
+            "deadline_at": transformed_external.get("deadline_at"),
             "assigned_user": transformed_external["assigned_user"],
             "group": transformed_external["group"],
             "year": transformed_external["year"],
@@ -175,6 +188,7 @@ def transfer_external_quest_to_local(quest_id: str):
         local_status=stored_external.get("local_status") if stored_external else None,
         transferred_quest_id=local_quest["id"],
     )
+    delete_external_quest(quest_id)
     return local_quest
 
 
@@ -237,6 +251,35 @@ def update_quest_status(quest_id: str, status: str):
 
 
 def update_quest_priority(quest_id: str, priority: str):
+    if quest_id.startswith("external:"):
+        external_quest = find_external_quest(quest_id)
+        if external_quest is None:
+            return None
+
+        stored_external = get_external_quest(quest_id)
+        matziah = _normalize_matziah(
+            stored_external.get("matziah") if stored_external else None,
+            default="N",
+        )
+        next_payload = {**external_quest, "priority": priority}
+        if priority != "deadline":
+            next_payload["deadline_at"] = None
+
+        saved_external = save_external_quest(
+            quest_id,
+            next_payload,
+            matziah=matziah,
+            local_status=stored_external.get("local_status") if stored_external else None,
+            transferred_quest_id=stored_external.get("transferred_quest_id") if stored_external else None,
+        )
+        return transform_external_quest_with_metadata(
+            next_payload,
+            status_override=stored_external.get("local_status") if stored_external else None,
+            metadata=saved_external,
+        )
+
+    if priority != "deadline":
+        return update_quest(quest_id, {"priority": priority, "deadline_at": None})
     return update_quest(quest_id, {"priority": priority})
 
 
@@ -249,6 +292,7 @@ def update_quest_fields(quest_id: str, fields: dict):
         "group",
         "year",
         "date",
+        "deadline_at",
         "notes",
         "model_folder",
         "model_simulations",

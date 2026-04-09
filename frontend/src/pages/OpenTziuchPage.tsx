@@ -6,7 +6,7 @@ import ThemeToggle from '../components/ThemeToggle';
 import { useAuth } from '../context/AuthContext';
 import { addPendingQuestNotificationId } from '../lib/pendingQuestNotifications';
 import { createExternalQuest } from '../services/api';
-import { DEFAULT_STATUS } from '../utils/questOptions';
+import { DEFAULT_STATUS, isDeadlinePriorityValue } from '../utils/questOptions';
 
 function getToday() {
   return new Date().toISOString().slice(0, 10);
@@ -22,9 +22,10 @@ export default function OpenTziuchPage() {
       year: 2026,
       ft: 'FT1',
       status: DEFAULT_STATUS,
-      priority: 'רגיל',
+      priority: '',
       matziah: 'N',
       date: getToday(),
+      deadline_at: '',
       assigned_user: user?.display_name || user?.username || '',
       group: user?.group || 'לווינות',
     }),
@@ -42,6 +43,10 @@ export default function OpenTziuchPage() {
       setError('יש להזין כותרת למשימה');
       return;
     }
+    if (isDeadlinePriorityValue(form.priority) && (!form.deadline_at || !form.deadline_at.includes('T'))) {
+      setError('בתעדוף זמן מוגדר יש להזין תאריך ושעה');
+      return;
+    }
 
     setSaving(true);
     setError('');
@@ -52,8 +57,9 @@ export default function OpenTziuchPage() {
         title: form.title.trim(),
         description: form.description.trim(),
         status: form.status,
-        priority: form.priority,
+        priority: form.priority || undefined,
         date: form.date,
+        deadline_at: form.deadline_at || undefined,
         assigned_user: form.assigned_user?.trim(),
         year: form.year,
         ft: form.ft,
@@ -96,6 +102,7 @@ export default function OpenTziuchPage() {
           <QuestFormFields
             value={form}
             onChange={setForm}
+            allowEmptyPriority
             showDate
             showAssignedUser
             showGroup

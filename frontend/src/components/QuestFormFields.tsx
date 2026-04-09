@@ -3,7 +3,9 @@ import type { CSSProperties } from 'react';
 import { FT_OPTIONS } from '../services/ftConfig';
 import type { FtOption, MatziahOption, QuestPriority, QuestStatus } from '../types/domain';
 import {
+  EXTERNAL_QUEST_PRIORITY_OPTIONS,
   MATZIAH_OPTIONS,
+  isDeadlinePriorityValue,
   QUEST_PRIORITY_OPTIONS,
   QUICK_CREATE_STATUS_OPTIONS,
   getMatziahHint,
@@ -18,6 +20,7 @@ export interface QuestFormValue {
   priority: QuestPriority | string;
   matziah: MatziahOption | string;
   date?: string;
+  deadline_at?: string;
   assigned_user?: string;
   group?: string;
 }
@@ -26,6 +29,7 @@ interface QuestFormFieldsProps {
   value: QuestFormValue;
   onChange: (nextValue: QuestFormValue) => void;
   statusOptions?: Array<{ value: QuestStatus | string; label: string }>;
+  allowEmptyPriority?: boolean;
   showDate?: boolean;
   showAssignedUser?: boolean;
   showGroup?: boolean;
@@ -37,6 +41,7 @@ export default function QuestFormFields({
   value,
   onChange,
   statusOptions = QUICK_CREATE_STATUS_OPTIONS,
+  allowEmptyPriority = false,
   showDate = false,
   showAssignedUser = false,
   showGroup = false,
@@ -47,6 +52,7 @@ export default function QuestFormFields({
       [field]: nextFieldValue,
     });
   };
+  const priorityOptions = allowEmptyPriority ? EXTERNAL_QUEST_PRIORITY_OPTIONS : QUEST_PRIORITY_OPTIONS;
 
   return (
     <>
@@ -142,10 +148,22 @@ export default function QuestFormFields({
         <select
           className="input"
           value={value.priority}
-          onChange={(event) => updateField('priority', event.target.value as QuestPriority)}
+          onChange={(event) => {
+            const nextPriority = event.target.value as QuestPriority | string;
+            const nextValue: QuestFormValue = { ...value, priority: nextPriority };
+
+            if (showDate && isDeadlinePriorityValue(nextPriority)) {
+              if (!nextValue.deadline_at || !nextValue.deadline_at.includes('T')) {
+                const baseDate = (nextValue.date || new Date().toISOString().slice(0, 10)).slice(0, 10);
+                nextValue.deadline_at = `${baseDate}T08:00`;
+              }
+            }
+
+            onChange(nextValue);
+          }}
           style={S.input}
         >
-          {QUEST_PRIORITY_OPTIONS.map((option) => (
+          {priorityOptions.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
             </option>
@@ -164,6 +182,17 @@ export default function QuestFormFields({
           ))}
         </select>
       </div>
+
+      {showDate && isDeadlinePriorityValue(value.priority) && (
+        <input
+          className="input"
+          type="datetime-local"
+          value={value.deadline_at || ''}
+          onChange={(event) => updateField('deadline_at', event.target.value)}
+          style={S.input}
+          placeholder="דדליין"
+        />
+      )}
 
       <div style={S.hint}>{getMatziahHint(value.matziah)}</div>
     </>

@@ -6,9 +6,12 @@ import {
   ATTRIBUTE_TABLE_SQL_FIELDS,
   getAttributeTableColumns,
   QUEST_STATUS_OPTIONS,
+  type AttributeTableViewMode,
   type AttributeColumnKey,
   type AttributeColumn,
 } from '../config/questTableColumns';
+import { EXTERNAL_QUEST_PRIORITY_OPTIONS } from '../utils/questOptions';
+import { isLowPriorityQuest, isOpenViewQuest, isPausedStatus } from '../utils/quests';
 
 interface AttributeTableProps {
   quests: Quest[];
@@ -21,7 +24,7 @@ interface AttributeTableProps {
   onDeleteGeometry?: (questId: string, type: 'point' | 'polygon') => Promise<void>;
   onSavePointGeometry?: (questId: string, utm: string) => Promise<void>;
   onRefreshFinished?: () => Promise<unknown>;
-  onViewModeChange?: (mode: 'all' | 'active' | 'finished') => void;
+  onViewModeChange?: (mode: AttributeTableViewMode) => void;
 }
 
 type EditableField =
@@ -32,6 +35,7 @@ type EditableField =
   | 'group'
   | 'year'
   | 'date'
+  | 'deadline_at'
   | 'notes'
   | 'model_simulations';
 
@@ -41,10 +45,16 @@ interface SqlFilter {
   value: string;
 }
 
-type ViewMode = 'all' | 'active' | 'finished';
+const VIEW_MODE_OPTIONS: Array<{ mode: AttributeTableViewMode; icon: string; label: string }> = [
+  { mode: 'all', icon: '🗂', label: 'הכל' },
+  { mode: 'open', icon: '📋', label: 'פתוחות' },
+  { mode: 'paused', icon: '⏸', label: 'הופסקו' },
+  { mode: 'low', icon: '⬇', label: 'תעדוף נמוך' },
+  { mode: 'finished', icon: '✅', label: 'הושלמו' },
+];
 
 
-const PRIORITY_OPTIONS: QuestPriority[] = ['גבוה', 'רגיל', 'נמוך'];
+const PRIORITY_OPTIONS: Array<{ value: QuestPriority | string; label: string }> = EXTERNAL_QUEST_PRIORITY_OPTIONS;
 
 export default function AttributeTable({
   quests,
@@ -70,7 +80,7 @@ export default function AttributeTable({
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
   const [resizing, setResizing] = useState<{ key: string; startX: number; startWidth: number } | null>(null);
   const resizingRef = useRef<{ key: string; startX: number; startWidth: number } | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>('all');
+  const [viewMode, setViewMode] = useState<AttributeTableViewMode>('all');
   const [sqlFilters, setSqlFilters] = useState<SqlFilter[]>([]);
   const [activeSqlFilter, setActiveSqlFilter] = useState<SqlFilter | null>(null);
   const [showSqlPanel, setShowSqlPanel] = useState(false);
@@ -164,7 +174,21 @@ export default function AttributeTable({
     columnWidths[key] || ATTRIBUTE_TABLE_DEFAULT_COL_WIDTHS[key] || undefined;
 
   const currentColumns = getCurrentColumns();
-  const currentQuests = viewMode === 'finished' ? finishedQuests : viewMode === 'active' ? quests : [...quests, ...finishedQuests];
+  const currentQuests = useMemo(() => {
+    if (viewMode === 'finished') {
+      return finishedQuests;
+    }
+    if (viewMode === 'open') {
+      return quests.filter((quest) => isOpenViewQuest(quest));
+    }
+    if (viewMode === 'paused') {
+      return quests.filter((quest) => isPausedStatus(quest.status));
+    }
+    if (viewMode === 'low') {
+      return quests.filter((quest) => isLowPriorityQuest(quest));
+    }
+    return [...quests, ...finishedQuests];
+  }, [finishedQuests, quests, viewMode]);
 
   const rows = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
@@ -230,7 +254,7 @@ export default function AttributeTable({
     URL.revokeObjectURL(url);
   };
 
-  const handleViewModeChange = (mode: ViewMode) => {
+  const handleViewModeChange = (mode: AttributeTableViewMode) => {
     setViewMode(mode);
     onViewModeChange?.(mode);
     if (mode === 'finished' && onRefreshFinished) {
@@ -392,27 +416,17 @@ export default function AttributeTable({
         </div>
         <div style={S.headerActions}>
           <div style={S.viewToggle}>
-            <button
-              style={{ ...S.viewToggleBtn, ...(viewMode === 'all' ? S.viewToggleBtnActive : {}) }}
-              onClick={() => handleViewModeChange('all')}
-              type="button"
-            >
-              הכל
-            </button>
-            <button
-              style={{ ...S.viewToggleBtn, ...(viewMode === 'active' ? S.viewToggleBtnActive : {}) }}
-              onClick={() => handleViewModeChange('active')}
-              type="button"
-            >
-              פעילות
-            </button>
-            <button
-              style={{ ...S.viewToggleBtn, ...(viewMode === 'finished' ? S.viewToggleBtnActive : {}) }}
-              onClick={() => handleViewModeChange('finished')}
-              type="button"
-            >
-              הושלמו
-            </button>
+            {VIEW_MODE_OPTIONS.map((option) => (
+              <button
+                key={option.mode}
+                style={{ ...S.viewToggleBtn, ...(viewMode === option.mode ? S.viewToggleBtnActive : {}) }}
+                onClick={() => handleViewModeChange(option.mode)}
+                type="button"
+                title={option.label}
+              >
+                {option.icon}
+              </button>
+            ))}
           </div>
           <div style={S.zoomControls}>
             <button className="btn btn-ghost btn-sm" type="button" onClick={handleZoomOut} title="הקטן">
@@ -795,7 +809,7 @@ function EditableCell({
         onClick={(e) => e.stopPropagation()}
       >
         {PRIORITY_OPTIONS.map((opt) => (
-          <option key={opt} value={opt}>{opt}</option>
+          <option key={opt.value} value={opt.value}>{opt.label}</option>
         ))}
       </select>
     );
@@ -807,6 +821,18 @@ function EditableCell({
         style={S.editInput}
         type="number"
         value={typeof value === 'number' ? value : ''}
+        onChange={(e) => onChange(e.target.value)}
+        onClick={(e) => e.stopPropagation()}
+      />
+    );
+  }
+
+  if (field === 'deadline_at') {
+    return (
+      <input
+        style={S.editInput}
+        type="datetime-local"
+        value={typeof value === 'string' ? value : ''}
         onChange={(e) => onChange(e.target.value)}
         onClick={(e) => e.stopPropagation()}
       />
@@ -955,8 +981,10 @@ const S: Record<string, CSSProperties> = {
     gap: 2,
   },
   viewToggleBtn: {
-    fontSize: 11,
-    padding: '4px 10px',
+    fontSize: 14,
+    lineHeight: 1,
+    padding: '6px 10px',
+    minWidth: 38,
     borderRadius: 6,
     border: 'none',
     background: 'transparent',

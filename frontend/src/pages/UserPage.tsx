@@ -11,9 +11,10 @@ import { useNavigate } from 'react-router-dom';
 import ThemeToggle from '../components/ThemeToggle';
 import { useAuth } from '../context/AuthContext';
 import { createUser, deleteUser, getQuests, getUsers, updateUser as updateUserApi } from '../services/api';
+import { getFtEntries, saveFtEntries, type FtConfigEntry } from '../services/ftConfig';
 import type { Quest, User, UserCreateInput, UserRole, UserUpdateInput } from '../types/domain';
 import { USER_CREATE_FIELDS, USER_EDIT_FIELDS } from '../config/userFields';
-import { isFinishedStatus } from '../utils/quests';
+import { isFinishedStatus, isHighPriorityQuest } from '../utils/quests';
 
 const ROLE_LABELS: Record<UserRole, string> = {
   'Team Leader': 'מנהל צוות',
@@ -38,6 +39,11 @@ const EMPTY_CREATE_FORM: UserCreateInput = {
   display_name: '',
 };
 
+const EMPTY_FT_ENTRY: FtConfigEntry = {
+  key: '',
+  color: '#4f7cff',
+};
+
 export default function UserPage() {
   const navigate = useNavigate();
   const { user, logout, updateUser: updateSessionUser } = useAuth();
@@ -50,6 +56,8 @@ export default function UserPage() {
   const [savingUserId, setSavingUserId] = useState<string | null>(null);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [ftEntries, setFtEntries] = useState<FtConfigEntry[]>([]);
+  const [ftSaving, setFtSaving] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
@@ -91,6 +99,19 @@ export default function UserPage() {
     void loadData();
   }, [loadData]);
 
+  useEffect(() => {
+    setFtEntries(getFtEntries());
+
+    const handleFtConfigChanged = () => {
+      setFtEntries(getFtEntries());
+    };
+
+    window.addEventListener('ft-config-changed', handleFtConfigChanged);
+    return () => {
+      window.removeEventListener('ft-config-changed', handleFtConfigChanged);
+    };
+  }, []);
+
   const displayName = user?.display_name || user?.username || 'Unknown user';
   const identitySet = useMemo(() => {
     return new Set(
@@ -113,7 +134,7 @@ export default function UserPage() {
     [myQuests]
   );
   const myHighPriorityQuests = useMemo(
-    () => myQuests.filter((quest) => String(quest.priority || '').trim() === 'גבוה'),
+    () => myQuests.filter((quest) => isHighPriorityQuest(quest)),
     [myQuests]
   );
   const recentAssignedQuests = useMemo(() => myQuests.slice(0, 5), [myQuests]);
@@ -245,6 +266,56 @@ export default function UserPage() {
     }
   };
 
+  const updateFtDraft = (index: number, field: keyof FtConfigEntry, value: string) => {
+    setFtEntries((current) =>
+      current.map((entry, currentIndex) =>
+        currentIndex === index
+          ? { ...entry, [field]: field === 'key' ? value.toUpperCase() : value }
+          : entry
+      )
+    );
+  };
+
+  const addFtDraft = () => {
+    setFtEntries((current) => [...current, { ...EMPTY_FT_ENTRY }]);
+  };
+
+  const removeFtDraft = (index: number) => {
+    setFtEntries((current) => current.filter((_, currentIndex) => currentIndex !== index));
+  };
+
+  const handleSaveFtConfig = () => {
+    setError('');
+    setMessage('');
+
+    const normalizedEntries = ftEntries
+      .map((entry) => ({
+        key: entry.key.trim().toUpperCase().replace(/\s+/g, '_'),
+        color: entry.color || '#6b7280',
+      }))
+      .filter((entry) => entry.key.length > 0);
+
+    const seen = new Set<string>();
+    for (const entry of normalizedEntries) {
+      if (seen.has(entry.key)) {
+        setError(`FT כפול: ${entry.key}`);
+        return;
+      }
+      seen.add(entry.key);
+    }
+
+    setFtSaving(true);
+    try {
+      const saved = saveFtEntries(normalizedEntries);
+      setFtEntries(saved);
+      setMessage('רשימת FT נשמרה בהצלחה');
+    } catch {
+      setError('שמירת FT נכשלה');
+    } finally {
+      setFtSaving(false);
+    }
+  };
+
   const avatar = displayName[0]?.toUpperCase() || '?';
 
   return (
@@ -342,6 +413,45 @@ export default function UserPage() {
               <div style={S.adminStat}><strong>{teamLeaderCount}</strong><span>מנהלים</span></div>
               <div style={S.adminStat}><strong>{regularUserCount}</strong><span>משתמשים</span></div>
               <div style={S.adminStat}><strong>{viewerCount}</strong><span>צופים</span></div>
+            </div>
+
+            <div style={S.formCard}>
+              <div style={S.cardTitle}>ניהול FT</div>
+              <p style={S.sectionSubtitle}>הוספה, שינוי שם וצבע ברשימת ה-FT במערכת</p>
+              <div style={S.ftList}>
+                {ftEntries.map((entry, index) => (
+                  <div key={`${entry.key || 'new'}-${index}`} style={S.ftRow}>
+                    <input
+                      value={entry.key}
+                      onChange={(event) => updateFtDraft(index, 'key', event.target.value)}
+                      placeholder="FT_KEY"
+                    />
+                    <input
+                      value={entry.color}
+                      onChange={(event) => updateFtDraft(index, 'color', event.target.value)}
+                      placeholder="#4f7cff"
+                    />
+                    <input
+                      type="color"
+                      value={entry.color || '#6b7280'}
+                      onChange={(event) => updateFtDraft(index, 'color', event.target.value)}
+                      style={S.ftColorInput}
+                      title="צבע FT"
+                    />
+                    <button className="btn btn-danger btn-sm" type="button" onClick={() => removeFtDraft(index)}>
+                      מחק
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <div style={S.formActions}>
+                <button className="btn btn-ghost btn-sm" type="button" onClick={addFtDraft}>
+                  + הוסף FT
+                </button>
+                <button className="btn btn-primary btn-sm" type="button" onClick={handleSaveFtConfig} disabled={ftSaving}>
+                  {ftSaving ? 'שומר...' : 'שמור FT'}
+                </button>
+              </div>
             </div>
 
             <form style={S.formCard} onSubmit={(event) => void handleCreateUser(event)}>
@@ -688,6 +798,23 @@ const S: Record<string, CSSProperties> = {
     gap: 10,
     marginTop: 12,
     flexWrap: 'wrap',
+  },
+  ftList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
+  },
+  ftRow: {
+    display: 'grid',
+    gridTemplateColumns: 'minmax(120px, 1fr) minmax(120px, 1fr) 52px auto',
+    gap: 8,
+    alignItems: 'center',
+  },
+  ftColorInput: {
+    width: 52,
+    height: 40,
+    padding: 4,
+    cursor: 'pointer',
   },
   userList: {
     display: 'grid',

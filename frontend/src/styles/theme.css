@@ -81,6 +81,7 @@
 html, body, #root {
   height: 100%;
   font-family: var(--font);
+  font-size: 16px;
   background: var(--bg);
   color: var(--text);
   direction: rtl;
@@ -88,6 +89,7 @@ html, body, #root {
 }
 
 body {
+  line-height: 1.45;
   transition: background var(--transition), color var(--transition);
 }
 
@@ -103,7 +105,7 @@ body {
   border: none;
   border-radius: var(--radius-sm);
   font-family: var(--font);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   cursor: pointer;
   transition: var(--transition);
@@ -152,7 +154,7 @@ body {
 
 .btn-sm {
   padding: 4px 10px;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .btn-full {
@@ -171,7 +173,7 @@ input, select, textarea {
   border-radius: var(--radius-sm);
   color: var(--text);
   font-family: var(--font);
-  font-size: 14px;
+  font-size: 15px;
   padding: 9px 12px;
   outline: none;
   transition: border-color var(--transition), box-shadow var(--transition), background var(--transition);
@@ -189,7 +191,7 @@ input:focus, select:focus, textarea:focus {
   gap: 5px;
   padding: 3px 9px;
   border-radius: 99px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.3px;
 }

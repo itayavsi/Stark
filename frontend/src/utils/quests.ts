@@ -5,6 +5,7 @@ import {
   type QuestPanelColumnKey,
   type QuestStatusCategory,
 } from '../config/questTableColumns';
+import { isHighPriorityValue, isLowPriorityValue } from './questOptions';
 
 interface QuestView {
   id: 'open' | 'done' | 'stopped' | 'more' | 'new' | 'low';
@@ -82,8 +83,11 @@ export function isStartStatus(status: string | undefined): boolean {
 }
 
 export function isLowPriorityQuest(quest: Quest): boolean {
-  const priority = String(quest.priority ?? '').trim().toLowerCase();
-  return priority === 'נמוך' || priority === 'low' || priority === 'low priority';
+  return isLowPriorityValue(quest.priority);
+}
+
+export function isHighPriorityQuest(quest: Quest): boolean {
+  return isHighPriorityValue(quest.priority);
 }
 
 export function isMoreQuest(quest: Quest): boolean {
@@ -169,12 +173,15 @@ export function filterQuests(
 
   return quests.filter((quest) => {
     const normalizedStatus = normalizeQuestStatus(quest.status) ?? quest.status;
+    const isExternalQuest = String(quest.id || '').startsWith('external:');
     let matchesView = false;
 
-    if (scope === 'all') {
+    if (isExternalQuest && viewId !== 'new') {
+      matchesView = false;
+    } else if (scope === 'all') {
       matchesView = true;
     } else if (viewId === 'new') {
-      matchesView = Boolean(quest.isNew);
+      matchesView = isExternalQuest || Boolean(quest.isNew);
     } else if (viewId === 'low') {
       matchesView = isLowPriorityQuest(quest);
     } else if (viewId === 'open') {

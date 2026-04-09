@@ -8,7 +8,7 @@ export interface AttributeColumn {
   editable?: boolean;
 }
 
-export type AttributeTableViewMode = 'all' | 'active' | 'finished';
+export type AttributeTableViewMode = 'all' | 'open' | 'paused' | 'low' | 'finished';
 
 // # Open quests (Attribute Table) columns: add/remove/change here
 export const ATTRIBUTE_TABLE_COLUMNS_ACTIVE: AttributeColumn[] = [
@@ -20,6 +20,7 @@ export const ATTRIBUTE_TABLE_COLUMNS_ACTIVE: AttributeColumn[] = [
   { key: 'year', label: 'שנה', editable: true },
   { key: 'assigned_user', label: 'משויך', editable: true },
   { key: 'date', label: 'תאריך', editable: true },
+  { key: 'deadline_at', label: 'דדליין', editable: true },
   { key: 'notes', label: 'הערות', editable: true },
   { key: 'model_simulations', label: 'הדמאות למודלים', editable: true },
   { key: 'model_folder', label: 'Model Folder' },
@@ -38,6 +39,7 @@ export const ATTRIBUTE_TABLE_COLUMNS_FINISHED: AttributeColumn[] = [
   { key: 'year', label: 'שנה', editable: true },
   { key: 'assigned_user', label: 'משויך', editable: true },
   { key: 'date', label: 'תאריך', editable: true },
+  { key: 'deadline_at', label: 'דדליין', editable: true },
   { key: 'notes', label: 'הערות', editable: true },
   { key: 'model_simulations', label: 'הדמאות למודלים', editable: true },
   { key: 'model_folder', label: 'Model Folder' },
@@ -57,6 +59,7 @@ export const ATTRIBUTE_TABLE_COLUMNS_ALL: AttributeColumn[] = [
   { key: 'year', label: 'שנה', editable: true },
   { key: 'assigned_user', label: 'משויך', editable: true },
   { key: 'date', label: 'תאריך', editable: true },
+  { key: 'deadline_at', label: 'דדליין', editable: true },
   { key: 'notes', label: 'הערות', editable: true },
   { key: 'model_folder', label: 'Model Folder' },
   { key: 'geometry_type', label: 'סוג גיאומטריה' },
@@ -77,6 +80,7 @@ export const ATTRIBUTE_TABLE_DEFAULT_COL_WIDTHS: Record<string, number> = {
   year: 70,
   assigned_user: 120,
   date: 100,
+  deadline_at: 140,
   notes: 200,
   model_simulations: 200,
   model_folder: 160,
@@ -96,7 +100,9 @@ export const getAttributeTableColumns = (mode: AttributeTableViewMode): Attribut
   switch (mode) {
     case 'finished':
       return ATTRIBUTE_TABLE_COLUMNS_FINISHED;
-    case 'active':
+    case 'open':
+    case 'paused':
+    case 'low':
       return ATTRIBUTE_TABLE_COLUMNS_ACTIVE;
     default:
       return ATTRIBUTE_TABLE_COLUMNS_ALL;
@@ -117,6 +123,7 @@ export const QUEST_PANEL_COLUMNS: QuestPanelColumn[] = [
   { key: 'ft', label: 'FT' },
   { key: 'status', label: 'סטטוס' },
   { key: 'date', label: 'תאריך' },
+  { key: 'deadline_at', label: 'דדליין' },
   { key: 'assigned_user', label: 'משתמש' },
   { key: 'description', label: 'תיאור' },
   { key: 'model_simulations', label: 'הדמאות למודלים' },
@@ -131,6 +138,7 @@ export const QUEST_PANEL_DEFAULT_COL_WIDTHS: Partial<Record<QuestPanelColumnKey,
   ft: 90,
   status: 140,
   date: 110,
+  deadline_at: 140,
   assigned_user: 140,
   description: 260,
   model_simulations: 220,
