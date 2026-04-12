@@ -119,6 +119,21 @@ def transform_external_quest_with_metadata(
     notes = str(item.get("notes", "") or "")
     objects = item.get("objects")
     priority = item.get("priority")
+    model_name = metadata.get("model_name") or item.get("model_name") or item.get("model") or item.get("model_simulations")
+    target_type = metadata.get("target_type") or item.get("target_type")
+    country = metadata.get("country") or item.get("country")
+    zarhan_notes = (
+        metadata.get("zarhan_notes")
+        or item.get("zarhan_notes")
+        or item.get("consumer_notes")
+        or item.get("zarhanNotes")
+    )
+    user_priority = metadata.get("user_priority") or item.get("user_priority")
+    duo_to_use = metadata.get("duo_to_use") or item.get("duo_to_use")
+    ground_point = metadata.get("ground_point") or item.get("ground_point")
+    solve_strategy = metadata.get("solve_strategy") or item.get("solve_strategy")
+    entry_date = metadata.get("entry_date") or item.get("entry_date") or date_text
+    finished_date = metadata.get("finished_date") or item.get("finished_date")
     matziah = str(metadata.get("matziah") or item.get("matziah") or "N")
     transferred_quest_id = metadata.get("transferred_quest_id")
     extra_bits = []
@@ -139,6 +154,16 @@ def transform_external_quest_with_metadata(
         "deadline_at": deadline_at,
         "assigned_user": str(item.get("opener", "") or "") or None,
         "shapefile_path": None,
+        "model_simulations": str(model_name) if model_name not in (None, "") else None,
+        "target_type": str(target_type) if target_type not in (None, "") else None,
+        "country": str(country) if country not in (None, "") else None,
+        "zarhan_notes": str(zarhan_notes) if zarhan_notes not in (None, "") else None,
+        "user_priority": str(user_priority) if user_priority not in (None, "") else None,
+        "duo_to_use": str(duo_to_use) if duo_to_use not in (None, "") else None,
+        "ground_point": str(ground_point) if ground_point not in (None, "") else None,
+        "solve_strategy": str(solve_strategy) if solve_strategy not in (None, "") else None,
+        "entry_date": str(entry_date) if entry_date not in (None, "") else date_text,
+        "finished_date": str(finished_date) if finished_date not in (None, "") else None,
         "group": str(item.get("group", EXTERNAL_QUESTS_GROUP) or EXTERNAL_QUESTS_GROUP),
         "year": _extract_year(date_text),
         "ft": str(item.get("ft", "FT1") or "FT1"),
@@ -226,6 +251,22 @@ def build_external_quest_payload(data: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _build_local_overrides(data: dict[str, Any], default_entry_date: str) -> dict[str, Any]:
+    overrides = {
+        "model_name": data.get("model_simulations"),
+        "target_type": data.get("target_type"),
+        "country": data.get("country"),
+        "zarhan_notes": data.get("zarhan_notes"),
+        "user_priority": data.get("user_priority"),
+        "duo_to_use": data.get("duo_to_use"),
+        "ground_point": data.get("ground_point"),
+        "solve_strategy": data.get("solve_strategy"),
+        "entry_date": data.get("entry_date") or default_entry_date,
+        "finished_date": data.get("finished_date"),
+    }
+    return {key: value for key, value in overrides.items() if value not in (None, "")}
+
+
 def _extract_created_item(response: httpx.Response) -> dict[str, Any] | None:
     if not response.content:
         return None
@@ -253,6 +294,7 @@ def _extract_created_item(response: httpx.Response) -> dict[str, Any] | None:
 
 def create_external_quest(data: dict[str, Any]) -> dict[str, Any]:
     payload = build_external_quest_payload(data)
+    local_overrides = _build_local_overrides(data, default_entry_date=str(payload.get("relevancy:Date") or ""))
     external_id = build_external_id(payload)
 
     try:
@@ -262,7 +304,7 @@ def create_external_quest(data: dict[str, Any]) -> dict[str, Any]:
             created_item = _extract_created_item(response)
 
         if created_item:
-            normalized_item = {**payload, **created_item, "source": "kipod"}
+            normalized_item = {**payload, **created_item, **local_overrides, "source": "kipod"}
             save_external_quest(build_external_id(normalized_item), normalized_item, matziah=str(normalized_item.get("matziah") or "N"))
             return normalized_item
 
@@ -272,15 +314,15 @@ def create_external_quest(data: dict[str, Any]) -> dict[str, Any]:
             payload["relevancy:Date"],
         )
         if matching_item:
-            normalized_item = {**matching_item, "source": "kipod"}
+            normalized_item = {**matching_item, **local_overrides, "source": "kipod"}
             save_external_quest(build_external_id(normalized_item), normalized_item, matziah=str(normalized_item.get("matziah") or "N"))
             return normalized_item
     except httpx.HTTPError:
-        fallback_item = {**payload, "source": "local-fallback"}
+        fallback_item = {**payload, **local_overrides, "source": "local-fallback"}
         save_external_quest(external_id, fallback_item, matziah=str(fallback_item.get("matziah") or "N"))
         return fallback_item
 
-    normalized_item = {**payload, "source": "kipod"}
+    normalized_item = {**payload, **local_overrides, "source": "kipod"}
     save_external_quest(external_id, normalized_item, matziah=str(normalized_item.get("matziah") or "N"))
     return normalized_item
 

@@ -40,6 +40,7 @@ def _build_local_quest_payload(data: dict, default_matziah: str = "H") -> dict:
     today = datetime.now().strftime("%Y-%m-%d")
     sync_external_id = data.get("sync_external_id")
     quest_type = data.get("quest_type") or data.get("ft") or "FT1"
+    status = data.get("status", "Start")
     raw_priority = data.get("priority")
     raw_deadline_at = data.get("deadline_at")
     raw_date = data.get("date")
@@ -49,11 +50,17 @@ def _build_local_quest_payload(data: dict, default_matziah: str = "H") -> dict:
     normalized_date = raw_date or today
     if isinstance(normalized_date, str) and "T" in normalized_date:
         normalized_date = normalized_date.split("T", 1)[0]
+    entry_date = data.get("entry_date") or today
+    finished_date = data.get("finished_date")
+    if status in FINISHED_STATUSES and not finished_date:
+        finished_date = today
+    if status not in FINISHED_STATUSES:
+        finished_date = None
     quest = {
         "id": str(uuid.uuid4()),
         "title": data.get("title", ""),
         "description": data.get("description", ""),
-        "status": data.get("status", "Start"),
+        "status": status,
         "priority": "ב" if raw_priority is None else raw_priority,
         "date": normalized_date,
         "deadline_at": deadline_at,
@@ -61,6 +68,15 @@ def _build_local_quest_payload(data: dict, default_matziah: str = "H") -> dict:
         "shapefile_path": data.get("shapefile_path"),
         "model_simulations": data.get("model_simulations"),
         "model_folder": data.get("model_folder"),
+        "target_type": data.get("target_type"),
+        "country": data.get("country"),
+        "zarhan_notes": data.get("zarhan_notes"),
+        "user_priority": data.get("user_priority"),
+        "duo_to_use": data.get("duo_to_use"),
+        "ground_point": data.get("ground_point"),
+        "solve_strategy": data.get("solve_strategy"),
+        "entry_date": entry_date,
+        "finished_date": finished_date,
         "group": data.get("group", "לווינות"),
         "year": data.get("year", datetime.now().year),
         "ft": quest_type,
@@ -172,6 +188,16 @@ def transfer_external_quest_to_local(quest_id: str):
             "date": transformed_external["date"],
             "deadline_at": transformed_external.get("deadline_at"),
             "assigned_user": transformed_external["assigned_user"],
+            "model_simulations": transformed_external.get("model_simulations"),
+            "target_type": transformed_external.get("target_type"),
+            "country": transformed_external.get("country"),
+            "zarhan_notes": transformed_external.get("zarhan_notes"),
+            "user_priority": transformed_external.get("user_priority"),
+            "duo_to_use": transformed_external.get("duo_to_use"),
+            "ground_point": transformed_external.get("ground_point"),
+            "solve_strategy": transformed_external.get("solve_strategy"),
+            "entry_date": transformed_external.get("entry_date"),
+            "finished_date": transformed_external.get("finished_date"),
             "group": transformed_external["group"],
             "year": transformed_external["year"],
             "ft": transformed_external["ft"],
@@ -241,12 +267,21 @@ def update_quest_status(quest_id: str, status: str):
             update_external_quest_status(sync_external_id, external_status, status)
 
     current_status = str(current_quest.get("status") or "")
+    today = datetime.now().strftime("%Y-%m-%d")
     if status in FINISHED_STATUSES and current_status not in FINISHED_STATUSES:
-        return move_quest(quest_id, "finished_quests", {"status": status})
+        return move_quest(quest_id, "finished_quests", {"status": status, "finished_date": today})
 
     if status not in FINISHED_STATUSES and current_status in FINISHED_STATUSES:
-        return move_quest(quest_id, "open_quests", {"status": status})
+        return move_quest(quest_id, "open_quests", {"status": status, "finished_date": None})
 
+    if status in FINISHED_STATUSES:
+        return update_quest(
+            quest_id,
+            {
+                "status": status,
+                "finished_date": current_quest.get("finished_date") or today,
+            },
+        )
     return update_quest(quest_id, {"status": status})
 
 
@@ -288,6 +323,7 @@ def update_quest_fields(quest_id: str, fields: dict):
         "title",
         "status",
         "priority",
+        "ft",
         "assigned_user",
         "group",
         "year",
@@ -296,12 +332,91 @@ def update_quest_fields(quest_id: str, fields: dict):
         "notes",
         "model_folder",
         "model_simulations",
+        "target_type",
+        "country",
+        "zarhan_notes",
+        "user_priority",
+        "duo_to_use",
+        "ground_point",
+        "solve_strategy",
+        "entry_date",
+        "finished_date",
     }
     update_data = {k: v for k, v in fields.items() if k in allowed_fields}
     if not update_data:
         return None
-    
-    return update_quest(quest_id, update_data)
+
+    if quest_id.startswith("external:"):
+        external_quest = find_external_quest(quest_id)
+        if external_quest is None:
+            return None
+
+        stored_external = get_external_quest(quest_id)
+        matziah = _normalize_matziah(
+            stored_external.get("matziah") if stored_external else external_quest.get("matziah"),
+            default="N",
+        )
+        next_payload = dict(external_quest)
+        field_mapping = {
+            "title": "name",
+            "priority": "priority",
+            "assigned_user": "opener",
+            "group": "group",
+            "year": "year",
+            "date": "relevancy:Date",
+            "deadline_at": "deadline_at",
+            "notes": "notes",
+            "model_simulations": "model_name",
+            "ft": "ft",
+            "target_type": "target_type",
+            "country": "country",
+            "zarhan_notes": "zarhan_notes",
+            "user_priority": "user_priority",
+            "duo_to_use": "duo_to_use",
+            "ground_point": "ground_point",
+            "solve_strategy": "solve_strategy",
+            "entry_date": "entry_date",
+            "finished_date": "finished_date",
+        }
+        for key, value in update_data.items():
+            if key == "status":
+                next_payload["status"] = map_local_status_to_external(str(value))
+                continue
+            mapped_key = field_mapping.get(key)
+            if mapped_key:
+                next_payload[mapped_key] = value
+
+        status_override = (
+            str(update_data["status"])
+            if "status" in update_data
+            else stored_external.get("local_status") if stored_external else None
+        )
+        saved_external = save_external_quest(
+            quest_id,
+            next_payload,
+            matziah=matziah,
+            local_status=status_override,
+            transferred_quest_id=stored_external.get("transferred_quest_id") if stored_external else None,
+        )
+        return transform_external_quest_with_metadata(
+            next_payload,
+            status_override=status_override,
+            metadata=saved_external,
+        )
+
+    next_status = update_data.pop("status", None)
+    if next_status is not None:
+        updated_status = update_quest_status(quest_id, str(next_status))
+        if updated_status is None:
+            return None
+
+    if update_data:
+        return update_quest(quest_id, update_data)
+
+    if next_status is not None:
+        return get_quest(quest_id)
+
+    return None
 
 
 def get_saved_quest_sort(group: str, view: str):

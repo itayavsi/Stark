@@ -101,9 +101,18 @@ def init_db() -> None:
                     shapefile_path TEXT NULL,
                     model_simulations TEXT NULL,
                     model_folder TEXT NULL,
+                    target_type TEXT NULL,
+                    country TEXT NULL,
+                    zarhan_notes TEXT NULL,
+                    user_priority TEXT NULL,
+                    duo_to_use TEXT NULL,
+                    ground_point TEXT NULL,
+                    solve_strategy TEXT NULL,
+                    entry_date TEXT NOT NULL DEFAULT (CURRENT_DATE::text),
+                    finished_date TEXT NULL,
                     group_name TEXT NOT NULL,
                     year INTEGER NOT NULL,
-                    ft TEXT NOT NULL
+                    ft TEXT NULL
                 );
                 """
             )
@@ -122,9 +131,18 @@ def init_db() -> None:
                     shapefile_path TEXT NULL,
                     model_simulations TEXT NULL,
                     model_folder TEXT NULL,
+                    target_type TEXT NULL,
+                    country TEXT NULL,
+                    zarhan_notes TEXT NULL,
+                    user_priority TEXT NULL,
+                    duo_to_use TEXT NULL,
+                    ground_point TEXT NULL,
+                    solve_strategy TEXT NULL,
+                    entry_date TEXT NOT NULL DEFAULT (CURRENT_DATE::text),
+                    finished_date TEXT NULL,
                     group_name TEXT NOT NULL,
                     year INTEGER NOT NULL,
-                    ft TEXT NOT NULL
+                    ft TEXT NULL
                 );
                 """
             )
@@ -167,6 +185,18 @@ def init_db() -> None:
             cur.execute(
                 f"""
                 ALTER TABLE {OPEN_QUESTS_TABLE}
+                ALTER COLUMN ft DROP NOT NULL;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {FINISHED_QUESTS_TABLE}
+                ALTER COLUMN ft DROP NOT NULL;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {OPEN_QUESTS_TABLE}
                 ADD COLUMN IF NOT EXISTS sync_external_id TEXT NULL;
                 """
             )
@@ -246,6 +276,114 @@ def init_db() -> None:
                 f"""
                 ALTER TABLE {FINISHED_QUESTS_TABLE}
                 ADD COLUMN IF NOT EXISTS deadline_at TEXT NULL;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {OPEN_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS target_type TEXT NULL;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {FINISHED_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS target_type TEXT NULL;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {OPEN_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS country TEXT NULL;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {FINISHED_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS country TEXT NULL;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {OPEN_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS zarhan_notes TEXT NULL;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {FINISHED_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS zarhan_notes TEXT NULL;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {OPEN_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS user_priority TEXT NULL;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {FINISHED_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS user_priority TEXT NULL;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {OPEN_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS duo_to_use TEXT NULL;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {FINISHED_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS duo_to_use TEXT NULL;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {OPEN_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS ground_point TEXT NULL;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {FINISHED_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS ground_point TEXT NULL;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {OPEN_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS solve_strategy TEXT NULL;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {FINISHED_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS solve_strategy TEXT NULL;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {OPEN_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS entry_date TEXT NOT NULL DEFAULT (CURRENT_DATE::text);
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {FINISHED_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS entry_date TEXT NOT NULL DEFAULT (CURRENT_DATE::text);
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {OPEN_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS finished_date TEXT NULL;
+                """
+            )
+            cur.execute(
+                f"""
+                ALTER TABLE {FINISHED_QUESTS_TABLE}
+                ADD COLUMN IF NOT EXISTS finished_date TEXT NULL;
                 """
             )
             cur.execute(
@@ -264,6 +402,34 @@ def init_db() -> None:
                 WHERE deadline_at IS NULL
                   AND "תעדוף" = 'deadline'
                   AND POSITION('T' IN date) > 0;
+                """
+            )
+            cur.execute(
+                f"""
+                UPDATE {OPEN_QUESTS_TABLE}
+                SET entry_date = COALESCE(NULLIF(entry_date, ''), date, CURRENT_DATE::text);
+                """
+            )
+            cur.execute(
+                f"""
+                UPDATE {FINISHED_QUESTS_TABLE}
+                SET entry_date = COALESCE(NULLIF(entry_date, ''), date, CURRENT_DATE::text);
+                """
+            )
+            cur.execute(
+                f"""
+                UPDATE {OPEN_QUESTS_TABLE}
+                SET
+                    finished_date = CASE
+                        WHEN status = 'Finished' THEN COALESCE(NULLIF(finished_date, ''), date, CURRENT_DATE::text)
+                        ELSE NULL
+                    END;
+                """
+            )
+            cur.execute(
+                f"""
+                UPDATE {FINISHED_QUESTS_TABLE}
+                SET finished_date = COALESCE(NULLIF(finished_date, ''), date, CURRENT_DATE::text);
                 """
             )
             cur.execute(
@@ -516,7 +682,10 @@ def init_db() -> None:
                 f"""
                 INSERT INTO {FINISHED_QUESTS_TABLE} (
                     id, title, description, status, "תעדוף", date, deadline_at, assigned_user,
-                    shapefile_path, model_simulations, model_folder, group_name, year, ft, "מצייח",
+                    shapefile_path, model_simulations, model_folder,
+                    target_type, country, zarhan_notes, user_priority, duo_to_use, ground_point, solve_strategy,
+                    entry_date, finished_date,
+                    group_name, year, ft, "מצייח",
                     sync_external_id, sync_source, sync_name,
                     geometry_type, geometry_status, geometry_geojson, geometry_source_path,
                     geometry_source_name, geometry_upload_kind, geometry_feature_count,
@@ -526,7 +695,10 @@ def init_db() -> None:
                 )
                 SELECT
                     id, title, description, status, "תעדוף", date, deadline_at, assigned_user,
-                    shapefile_path, model_simulations, model_folder, group_name, year, ft, "מצייח",
+                    shapefile_path, model_simulations, model_folder,
+                    target_type, country, zarhan_notes, user_priority, duo_to_use, ground_point, solve_strategy,
+                    entry_date, COALESCE(finished_date, date, CURRENT_DATE::text),
+                    group_name, year, ft, "מצייח",
                     sync_external_id, sync_source, sync_name,
                     geometry_type, geometry_status, geometry_geojson, geometry_source_path,
                     geometry_source_name, geometry_upload_kind, geometry_feature_count,

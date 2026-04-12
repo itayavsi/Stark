@@ -24,6 +24,9 @@ export default function OpenTziuchPage() {
       status: DEFAULT_STATUS,
       priority: '',
       matziah: 'N',
+      target_type: '',
+      country: '',
+      zarhan_notes: '',
       date: getToday(),
       deadline_at: '',
       assigned_user: user?.display_name || user?.username || '',
@@ -63,6 +66,9 @@ export default function OpenTziuchPage() {
         assigned_user: form.assigned_user?.trim(),
         year: form.year,
         ft: form.ft,
+        target_type: form.target_type?.trim() || undefined,
+        country: form.country?.trim() || undefined,
+        zarhan_notes: form.zarhan_notes?.trim() || undefined,
         group: form.group?.trim() || 'לווינות',
         matziah: form.matziah,
       });
@@ -106,6 +112,7 @@ export default function OpenTziuchPage() {
             showDate
             showAssignedUser
             showGroup
+            showZiyuhFields
           />
 
           {error && <div style={S.errorBox}>{error}</div>}

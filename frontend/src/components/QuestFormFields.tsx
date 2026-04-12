@@ -19,6 +19,9 @@ export interface QuestFormValue {
   status: QuestStatus | string;
   priority: QuestPriority | string;
   matziah: MatziahOption | string;
+  target_type?: string;
+  country?: string;
+  zarhan_notes?: string;
   date?: string;
   deadline_at?: string;
   assigned_user?: string;
@@ -33,6 +36,7 @@ interface QuestFormFieldsProps {
   showDate?: boolean;
   showAssignedUser?: boolean;
   showGroup?: boolean;
+  showZiyuhFields?: boolean;
 }
 
 const YEAR_OPTIONS = [2027, 2026, 2025, 2024, 2023];
@@ -45,6 +49,7 @@ export default function QuestFormFields({
   showDate = false,
   showAssignedUser = false,
   showGroup = false,
+  showZiyuhFields = false,
 }: QuestFormFieldsProps) {
   const updateField = <K extends keyof QuestFormValue>(field: K, nextFieldValue: QuestFormValue[K]) => {
     onChange({
@@ -72,6 +77,35 @@ export default function QuestFormFields({
         rows={3}
         style={{ ...S.input, resize: 'vertical', minHeight: 84 }}
       />
+
+      {showZiyuhFields && (
+        <>
+          <div style={S.grid2}>
+            <input
+              className="input"
+              placeholder="כינוי / אופי מטרה"
+              value={value.target_type || ''}
+              onChange={(event) => updateField('target_type', event.target.value)}
+              style={S.input}
+            />
+            <input
+              className="input"
+              placeholder="זירה"
+              value={value.country || ''}
+              onChange={(event) => updateField('country', event.target.value)}
+              style={S.input}
+            />
+          </div>
+          <textarea
+            className="input"
+            placeholder="הערות מהצרכן"
+            value={value.zarhan_notes || ''}
+            onChange={(event) => updateField('zarhan_notes', event.target.value)}
+            rows={2}
+            style={{ ...S.input, resize: 'vertical' }}
+          />
+        </>
+      )}
 
       {(showDate || showAssignedUser || showGroup) && (
         <div style={S.grid3}>

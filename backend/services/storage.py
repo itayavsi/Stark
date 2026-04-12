@@ -39,6 +39,15 @@ def _normalize_quest(row: Dict) -> Dict:
         "assigned_user": row["assigned_user"],
         "shapefile_path": row["shapefile_path"],
         "model_folder": row.get("model_folder"),
+        "target_type": row.get("target_type"),
+        "country": row.get("country"),
+        "zarhan_notes": row.get("zarhan_notes"),
+        "user_priority": row.get("user_priority"),
+        "duo_to_use": row.get("duo_to_use"),
+        "ground_point": row.get("ground_point"),
+        "solve_strategy": row.get("solve_strategy"),
+        "entry_date": row.get("entry_date"),
+        "finished_date": row.get("finished_date"),
         "group": row["group_name"],
         "year": row["year"],
         "ft": row["ft"],
@@ -79,6 +88,15 @@ def _quest_columns(table_alias: str = "q") -> str:
         {prefix}assigned_user,
         {prefix}shapefile_path,
         {prefix}model_folder,
+        {prefix}target_type,
+        {prefix}country,
+        {prefix}zarhan_notes,
+        {prefix}user_priority,
+        {prefix}duo_to_use,
+        {prefix}ground_point,
+        {prefix}solve_strategy,
+        {prefix}entry_date,
+        {prefix}finished_date,
         {prefix}group_name,
         {prefix}year,
         {prefix}ft,
@@ -277,21 +295,25 @@ def get_quest_by_sync_external_id(external_id: str) -> Optional[Dict]:
 
 def save_quest(quest: Dict):
     target_table = FINISHED_QUESTS_TABLE if quest.get("status") in {"Finished"} else OPEN_QUESTS_TABLE
-    if target_table == FINISHED_QUESTS_TABLE:
-        quest = {**quest, "model_simulations": None}
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 f"""
                 INSERT INTO {target_table} (
                     id, title, description, status, "תעדוף", date, deadline_at, assigned_user,
-                    shapefile_path, model_simulations, model_folder, group_name, year, ft, "מצייח",
+                    shapefile_path, model_simulations, model_folder,
+                    target_type, country, zarhan_notes, user_priority, duo_to_use, ground_point, solve_strategy,
+                    entry_date, finished_date,
+                    group_name, year, ft, "מצייח",
                     sync_external_id, sync_source, sync_name,
                     geometry_status, geometry_source_path, geometry_feature_count, geometry_updated_at
                 )
                 VALUES (
                     %(id)s, %(title)s, %(description)s, %(status)s, %(priority)s, %(date)s, %(deadline_at)s, %(assigned_user)s,
-                    %(shapefile_path)s, %(model_simulations)s, %(model_folder)s, %(group_name)s, %(year)s, %(ft)s, %(matziah)s,
+                    %(shapefile_path)s, %(model_simulations)s, %(model_folder)s,
+                    %(target_type)s, %(country)s, %(zarhan_notes)s, %(user_priority)s, %(duo_to_use)s, %(ground_point)s, %(solve_strategy)s,
+                    %(entry_date)s, %(finished_date)s,
+                    %(group_name)s, %(year)s, %(ft)s, %(matziah)s,
                     %(sync_external_id)s, %(sync_source)s, %(sync_name)s,
                     %(geometry_status)s, %(geometry_source_path)s, %(geometry_feature_count)s, NOW()
                 );
@@ -308,6 +330,15 @@ def save_quest(quest: Dict):
                     "shapefile_path": quest["shapefile_path"],
                     "model_simulations": quest.get("model_simulations"),
                     "model_folder": quest.get("model_folder"),
+                    "target_type": quest.get("target_type"),
+                    "country": quest.get("country"),
+                    "zarhan_notes": quest.get("zarhan_notes"),
+                    "user_priority": quest.get("user_priority"),
+                    "duo_to_use": quest.get("duo_to_use"),
+                    "ground_point": quest.get("ground_point"),
+                    "solve_strategy": quest.get("solve_strategy"),
+                    "entry_date": quest.get("entry_date") or quest.get("date"),
+                    "finished_date": quest.get("finished_date"),
                     "group_name": quest["group"],
                     "year": quest["year"],
                     "ft": quest["ft"],
@@ -338,6 +369,15 @@ def update_quest(quest_id: str, updates: Dict) -> Optional[Dict]:
         "assigned_user": "assigned_user",
         "shapefile_path": "shapefile_path",
         "model_folder": "model_folder",
+        "target_type": "target_type",
+        "country": "country",
+        "zarhan_notes": "zarhan_notes",
+        "user_priority": "user_priority",
+        "duo_to_use": "duo_to_use",
+        "ground_point": "ground_point",
+        "solve_strategy": "solve_strategy",
+        "entry_date": "entry_date",
+        "finished_date": "finished_date",
         "group": "group_name",
         "year": "year",
         "ft": "ft",
@@ -422,6 +462,15 @@ def move_quest(quest_id: str, destination_table: str, updates: Optional[Dict] = 
         "assigned_user": "assigned_user",
         "shapefile_path": "shapefile_path",
         "model_folder": "model_folder",
+        "target_type": "target_type",
+        "country": "country",
+        "zarhan_notes": "zarhan_notes",
+        "user_priority": "user_priority",
+        "duo_to_use": "duo_to_use",
+        "ground_point": "ground_point",
+        "solve_strategy": "solve_strategy",
+        "entry_date": "entry_date",
+        "finished_date": "finished_date",
         "group": "group_name",
         "year": "year",
         "ft": "ft",
@@ -473,6 +522,15 @@ def move_quest(quest_id: str, destination_table: str, updates: Optional[Dict] = 
                     assigned_user,
                     shapefile_path,
                     model_folder,
+                    target_type,
+                    country,
+                    zarhan_notes,
+                    user_priority,
+                    duo_to_use,
+                    ground_point,
+                    solve_strategy,
+                    entry_date,
+                    finished_date,
                     group_name,
                     year,
                     ft,
@@ -517,6 +575,15 @@ def move_quest(quest_id: str, destination_table: str, updates: Optional[Dict] = 
                 "assigned_user": row["assigned_user"],
                 "shapefile_path": row["shapefile_path"],
                 "model_folder": row.get("model_folder"),
+                "target_type": row.get("target_type"),
+                "country": row.get("country"),
+                "zarhan_notes": row.get("zarhan_notes"),
+                "user_priority": row.get("user_priority"),
+                "duo_to_use": row.get("duo_to_use"),
+                "ground_point": row.get("ground_point"),
+                "solve_strategy": row.get("solve_strategy"),
+                "entry_date": row.get("entry_date"),
+                "finished_date": row.get("finished_date"),
                 "group": row["group_name"],
                 "year": row["year"],
                 "ft": row["ft"],
@@ -546,9 +613,10 @@ def move_quest(quest_id: str, destination_table: str, updates: Optional[Dict] = 
             for key, value in updates.items():
                 if key in allowed_fields:
                     quest[key] = value
-
-            if destination_table == FINISHED_QUESTS_TABLE:
-                quest["model_simulations"] = None
+            if destination_table == FINISHED_QUESTS_TABLE and not quest.get("finished_date"):
+                quest["finished_date"] = datetime.now().strftime("%Y-%m-%d")
+            if destination_table == OPEN_QUESTS_TABLE and "finished_date" not in updates:
+                quest["finished_date"] = None
 
             for json_key in ("geometry_geojson", "geometry_point_geojson", "geometry_polygon_geojson"):
                 if isinstance(quest.get(json_key), dict):
@@ -567,6 +635,15 @@ def move_quest(quest_id: str, destination_table: str, updates: Optional[Dict] = 
                 ("assigned_user", "assigned_user"),
                 ("shapefile_path", "shapefile_path"),
                 ("model_folder", "model_folder"),
+                ("target_type", "target_type"),
+                ("country", "country"),
+                ("zarhan_notes", "zarhan_notes"),
+                ("user_priority", "user_priority"),
+                ("duo_to_use", "duo_to_use"),
+                ("ground_point", "ground_point"),
+                ("solve_strategy", "solve_strategy"),
+                ("entry_date", "entry_date"),
+                ("finished_date", "finished_date"),
                 ("group_name", "group"),
                 ("year", "year"),
                 ("ft", "ft"),

@@ -219,11 +219,12 @@ export default function HomePage() {
   }, []);
 
   const handleUpdateQuest = useCallback(async (quest: Quest) => {
-    const { id, title, status, priority, assigned_user, group, year, date, deadline_at, notes, model_folder, model_simulations } = quest;
-    await updateQuest(id, {
+    const {
+      id,
       title,
       status,
       priority,
+      ft,
       assigned_user,
       group,
       year,
@@ -232,6 +233,38 @@ export default function HomePage() {
       notes,
       model_folder,
       model_simulations,
+      target_type,
+      country,
+      zarhan_notes,
+      user_priority,
+      duo_to_use,
+      ground_point,
+      solve_strategy,
+      entry_date,
+      finished_date,
+    } = quest;
+    await updateQuest(id, {
+      title,
+      status,
+      priority,
+      ft,
+      assigned_user,
+      group,
+      year,
+      date,
+      deadline_at,
+      notes,
+      model_folder,
+      model_simulations,
+      target_type,
+      country,
+      zarhan_notes,
+      user_priority,
+      duo_to_use,
+      ground_point,
+      solve_strategy,
+      entry_date,
+      finished_date,
     });
     await refresh();
     await loadGeometryCatalog();
