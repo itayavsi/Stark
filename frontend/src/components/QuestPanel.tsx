@@ -40,6 +40,7 @@ import {
   DEFAULT_STATUS,
   QUICK_CREATE_STATUS_OPTIONS,
   QUEST_PRIORITY_OPTIONS,
+  getPriorityLabel,
   isDeadlinePriorityValue,
 } from '../utils/questOptions';
 import QuestItem from './QuestItem';
@@ -354,16 +355,34 @@ export default function QuestPanel({
     }
   };
 
-  const getQuestPanelCellValue = (quest: Quest, column: QuestPanelColumnKey, index: number) => {
-    if (column === 'id') return index + 1;
-    if (column === 'status') return getQuestStatusLabel(getQuestDisplayStatus(quest));
-    const value = quest[column as keyof Quest];
-    return value ?? '';
+  const getDeadlineDateLabel = (quest: Quest) => {
+    const deadlineSource = String(quest.deadline_at ?? '').trim();
+    if (!deadlineSource) return null;
+    return deadlineSource.replace('T', ' ').slice(0, 16);
   };
 
-  const getDeadlineTagLabel = (deadlineAtValue: string | undefined | null) => {
-    if (!deadlineAtValue) return 'עד ללא תאריך';
-    return `עד ${deadlineAtValue.replace('T', ' ').slice(0, 16)}`;
+  const getStatusLabel = (quest: Quest) => {
+    const displayStatus = getQuestDisplayStatus(quest);
+    return displayStatus === 'New' ? '🔔 חדש' : getQuestStatusLabel(displayStatus);
+  };
+
+  const getPriorityDisplayLabel = (quest: Quest) => {
+    const priorityValue = String(quest.priority ?? '').trim();
+    if (isDeadlinePriorityValue(priorityValue)) {
+      const deadlineLabel = getDeadlineDateLabel(quest);
+      if (deadlineLabel) {
+        return deadlineLabel;
+      }
+    }
+    return getPriorityLabel(priorityValue);
+  };
+
+  const getQuestPanelCellValue = (quest: Quest, column: QuestPanelColumnKey, index: number) => {
+    if (column === 'id') return index + 1;
+    if (column === 'status') return getStatusLabel(quest);
+    if (column === 'priority') return getPriorityDisplayLabel(quest);
+    const value = quest[column as keyof Quest];
+    return value ?? '';
   };
 
   const exportCSV = () => {
@@ -534,11 +553,13 @@ export default function QuestPanel({
                                 {getQuestDisplayStatus(q) === 'New' ? '🔔 חדש' : getQuestStatusLabel(getQuestDisplayStatus(q))}
                               </span>
                               {isLowPriorityQuest(q) && <span style={FS.priorityBadge}> תעדוף נמוך</span>}
-                              {isDeadlinePriorityValue(q.priority) && (
-                                <span style={FS.deadlineBadge}>
-                                  {getDeadlineTagLabel(q.deadline_at || (q.date && q.date.includes('T') ? q.date : undefined))}
-                                </span>
-                              )}
+                            </td>
+                          );
+                        }
+                        if (col.key === 'priority') {
+                          return (
+                            <td key={`${q.id}-priority`} style={{ ...FS.td, width: getColumnWidth(col.key) }}>
+                              {getPriorityDisplayLabel(q)}
                             </td>
                           );
                         }

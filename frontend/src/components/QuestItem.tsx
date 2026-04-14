@@ -133,10 +133,10 @@ export default function QuestItem({
   const ftClr = hasFt ? ftColor(questFt) : '#94a3b8';
   const lowPriority = isLowPriorityQuest(quest);
   const deadlinePriority = isDeadlinePriorityValue(quest.priority);
-  const deadlineSource = quest.deadline_at || (quest.date && String(quest.date).includes('T') ? quest.date : null);
-  const deadlineTag = deadlineSource
-    ? `עד ${String(deadlineSource).replace('T', ' ').slice(0, 16)}`
-    : 'עד ללא תאריך';
+  const deadlineSource = String(quest.deadline_at ?? '').trim();
+  const priorityDisplayValue = deadlinePriority
+    ? (deadlineSource ? deadlineSource.replace('T', ' ').slice(0, 16) : 'ללא תאריך')
+    : getPriorityLabel(String(quest.priority || ''));
   const canTransferToOpen = isExternalQuest && !quest.isTransferred && !isViewer;
   const priorityOptions = isExternalQuest ? EXTERNAL_QUEST_PRIORITY_OPTIONS : QUEST_PRIORITY_OPTIONS;
   const matziahValue = quest.matziah || '—';
@@ -485,15 +485,11 @@ export default function QuestItem({
         <div style={S.topLeft}>
           <span className={`badge ${status.cls}`}>{status.label}</span>
           {lowPriority && <span style={S.priorityBadge}> תעדוף נמוך</span>}
-          {deadlinePriority && <span style={S.deadlineBadge}>{deadlineTag}</span>}
           {isScopeVisible('C') && hasValue(quest.priority) && (
-            <span style={S.dataBadge}>תעדוף: {getPriorityLabel(String(quest.priority || ''))}</span>
+            <span style={S.dataBadge}>תעדוף: {priorityDisplayValue}</span>
           )}
           {!isExternalQuest && hasValue(quest.user_priority) && (
             <span style={S.dataBadge}>User Priority: {normalizeDisplayValue(quest.user_priority)}</span>
-          )}
-          {tableType !== 'external' && hasModelName && (
-            <span style={S.dataBadge}>שם מודל: {modelName}</span>
           )}
           <span style={{ ...S.ftBadge, background: `${ftClr}22`, color: ftClr, border: `1px solid ${ftClr}55` }}>
             {hasFt ? questFt : 'ללא FT'}
@@ -510,6 +506,9 @@ export default function QuestItem({
         <span style={S.metaItem}>📅 {quest.date}</span>
         {isScopeVisible('B') && hasValue(quest.assigned_user) && (
           <span style={S.metaItem}>👤 שם פותר: {quest.assigned_user}</span>
+        )}
+        {tableType !== 'external' && hasModelName && (
+            <span style={S.metaItem}>שם מודל: {modelName}</span>
         )}
       </div>
 
@@ -530,11 +529,6 @@ export default function QuestItem({
             <span style={S.infoLabel}>מצייח:</span>
             <span style={S.infoValue}>{matziahValue}</span>
           </div>
-          <div style={S.infoRow}>
-            <span style={S.infoLabel}>גיאומטריה:</span>
-            <span style={S.infoValue}>{geometryLabel}</span>
-          </div>
-
           {visibleExpandedPriorityTwoFields.length > 0 && (
             <div style={S.fieldGrid}>
               {visibleExpandedPriorityTwoFields.map((field) => (

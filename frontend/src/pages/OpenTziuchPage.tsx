@@ -59,7 +59,7 @@ export default function OpenTziuchPage() {
       const createdQuest = await createExternalQuest({
         title: form.title.trim(),
         description: form.description.trim(),
-        status: form.status,
+        status: DEFAULT_STATUS,
         priority: form.priority || undefined,
         date: form.date,
         deadline_at: form.deadline_at || undefined,

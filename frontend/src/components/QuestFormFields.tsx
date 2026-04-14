@@ -7,7 +7,6 @@ import {
   MATZIAH_OPTIONS,
   isDeadlinePriorityValue,
   QUEST_PRIORITY_OPTIONS,
-  QUICK_CREATE_STATUS_OPTIONS,
   getMatziahHint,
 } from '../utils/questOptions';
 
@@ -31,7 +30,6 @@ export interface QuestFormValue {
 interface QuestFormFieldsProps {
   value: QuestFormValue;
   onChange: (nextValue: QuestFormValue) => void;
-  statusOptions?: Array<{ value: QuestStatus | string; label: string }>;
   allowEmptyPriority?: boolean;
   showDate?: boolean;
   showAssignedUser?: boolean;
@@ -44,7 +42,6 @@ const YEAR_OPTIONS = [2027, 2026, 2025, 2024, 2023];
 export default function QuestFormFields({
   value,
   onChange,
-  statusOptions = QUICK_CREATE_STATUS_OPTIONS,
   allowEmptyPriority = false,
   showDate = false,
   showAssignedUser = false,
@@ -139,7 +136,7 @@ export default function QuestFormFields({
         </div>
       )}
 
-      <div style={S.grid3}>
+      <div style={S.grid2}>
         <select
           className="input"
           value={value.year}
@@ -161,18 +158,6 @@ export default function QuestFormFields({
           {FT_OPTIONS.map((ft) => (
             <option key={ft} value={ft}>
               {ft}
-            </option>
-          ))}
-        </select>
-        <select
-          className="input"
-          value={value.status}
-          onChange={(event) => updateField('status', event.target.value as QuestStatus)}
-          style={S.input}
-        >
-          {statusOptions.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
             </option>
           ))}
         </select>

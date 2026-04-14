@@ -10,8 +10,8 @@ import {
   type AttributeColumnKey,
   type AttributeColumn,
 } from '../config/questTableColumns';
-import { EXTERNAL_QUEST_PRIORITY_OPTIONS } from '../utils/questOptions';
-import { isLowPriorityQuest, isOpenViewQuest, isPausedStatus } from '../utils/quests';
+import { EXTERNAL_QUEST_PRIORITY_OPTIONS, getPriorityLabel, isDeadlinePriorityValue } from '../utils/questOptions';
+import { getQuestDisplayStatus, getQuestStatusLabel, isLowPriorityQuest, isOpenViewQuest, isPausedStatus } from '../utils/quests';
 
 interface AttributeTableProps {
   quests: Quest[];
@@ -863,6 +863,20 @@ function EditableCell({
 }
 
 function getColumnValue(quest: Quest, key: AttributeColumnKey): string | number {
+  if (key === 'status') {
+    const displayStatus = getQuestDisplayStatus(quest);
+    return displayStatus === 'New' ? '🔔 חדש' : getQuestStatusLabel(displayStatus);
+  }
+  if (key === 'priority') {
+    const priorityValue = String(quest.priority ?? '').trim();
+    if (isDeadlinePriorityValue(priorityValue)) {
+      const deadlineValue = String(quest.deadline_at ?? '').trim();
+      if (deadlineValue) {
+        return deadlineValue.replace('T', ' ').slice(0, 16);
+      }
+    }
+    return getPriorityLabel(priorityValue);
+  }
   if (key === 'geometry_summary') {
     return quest.geometry_source_name || quest.geometry_source_path || '—';
   }
