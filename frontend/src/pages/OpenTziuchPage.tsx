@@ -6,10 +6,28 @@ import ThemeToggle from '../components/ThemeToggle';
 import { useAuth } from '../context/AuthContext';
 import { addPendingQuestNotificationId } from '../lib/pendingQuestNotifications';
 import { createExternalQuest } from '../services/api';
-import { DEFAULT_STATUS, isDeadlinePriorityValue } from '../utils/questOptions';
+import { DEFAULT_STATUS, isDeadlinePriorityValue, toLegacyMatziahCode } from '../utils/questOptions';
 
 function getToday() {
   return new Date().toISOString().slice(0, 10);
+}
+
+function composeZarhanNotes(baseNotes: string | undefined, questOpener: string | undefined): string | undefined {
+  const normalizedBase = String(baseNotes || '').trim();
+  const normalizedOpener = String(questOpener || '').trim();
+
+  if (!normalizedBase && !normalizedOpener) {
+    return undefined;
+  }
+  if (!normalizedOpener) {
+    return normalizedBase;
+  }
+
+  const openerLine = `פותח ציוח: ${normalizedOpener}`;
+  if (!normalizedBase) {
+    return openerLine;
+  }
+  return `${normalizedBase}\n${openerLine}`;
 }
 
 export default function OpenTziuchPage() {
@@ -18,15 +36,16 @@ export default function OpenTziuchPage() {
   const initialForm = useMemo<QuestFormValue>(
     () => ({
       title: '',
-      description: '',
       year: 2026,
       ft: 'FT1',
       status: DEFAULT_STATUS,
       priority: '',
-      matziah: 'N',
+      matziah: 'Nezah',
       target_type: '',
       country: '',
       zarhan_notes: '',
+      quest_opener: '',
+      objects: '',
       date: getToday(),
       deadline_at: '',
       assigned_user: user?.display_name || user?.username || '',
@@ -52,31 +71,31 @@ export default function OpenTziuchPage() {
     }
 
     setSaving(true);
-    setError('');
-    setSuccess('');
+      setError('');
+      setSuccess('');
 
     try {
+      const mergedZarhanNotes = composeZarhanNotes(form.zarhan_notes, form.quest_opener);
       const createdQuest = await createExternalQuest({
         title: form.title.trim(),
-        description: form.description.trim(),
         status: DEFAULT_STATUS,
         priority: form.priority || undefined,
         date: form.date,
+        entry_date: getToday(),
         deadline_at: form.deadline_at || undefined,
-        assigned_user: form.assigned_user?.trim(),
         year: form.year,
-        ft: form.ft,
+        ft: String(form.ft || '').trim() ? String(form.ft).trim() : null,
         target_type: form.target_type?.trim() || undefined,
         country: form.country?.trim() || undefined,
-        zarhan_notes: form.zarhan_notes?.trim() || undefined,
+        zarhan_notes: mergedZarhanNotes,
+        objects: form.objects?.trim() || undefined,
         group: form.group?.trim() || 'לווינות',
-        matziah: form.matziah,
+        matziah: toLegacyMatziahCode(form.matziah),
       });
       addPendingQuestNotificationId(createdQuest.id);
       setSuccess('הציוח נפתח בהצלחה, נוסף למאגר החיצוני, ויופיע כהתראה חדשה ברשימת המשימות.');
       setForm({
         ...initialForm,
-        assigned_user: form.assigned_user,
         group: form.group,
       });
     } catch (err: any) {
@@ -109,8 +128,8 @@ export default function OpenTziuchPage() {
             value={form}
             onChange={setForm}
             allowEmptyPriority
+            allowEmptyFt
             showDate
-            showAssignedUser
             showGroup
             showZiyuhFields
           />

@@ -3,6 +3,7 @@ from datetime import datetime
 
 from services.external_quest_service import (
     build_external_id,
+    compose_open_quest_zarhan_notes,
     create_external_quest,
     fetch_external_quests,
     find_external_quest,
@@ -26,7 +27,7 @@ from services.storage import (
 
 
 VALID_MATZIAH = {"N", "H", "M"}
-FINISHED_STATUSES = {"Finished"}
+FINISHED_STATUSES = {"Finished", "Done", "Created"}
 
 
 def _normalize_matziah(value: str | None, default: str) -> str:
@@ -39,7 +40,11 @@ def _normalize_matziah(value: str | None, default: str) -> str:
 def _build_local_quest_payload(data: dict, default_matziah: str = "H") -> dict:
     today = datetime.now().strftime("%Y-%m-%d")
     sync_external_id = data.get("sync_external_id")
-    quest_type = data.get("quest_type") or data.get("ft") or "FT1"
+    quest_type = data.get("quest_type")
+    if quest_type in (None, ""):
+        quest_type = data.get("ft")
+    if quest_type in (None, "") and not sync_external_id:
+        quest_type = "FT1"
     status = data.get("status", "Start")
     raw_priority = data.get("priority")
     raw_deadline_at = data.get("deadline_at")
@@ -191,7 +196,12 @@ def transfer_external_quest_to_local(quest_id: str):
             "model_simulations": transformed_external.get("model_simulations"),
             "target_type": transformed_external.get("target_type"),
             "country": transformed_external.get("country"),
-            "zarhan_notes": transformed_external.get("zarhan_notes"),
+            "zarhan_notes": compose_open_quest_zarhan_notes(
+                transformed_external.get("zarhan_notes"),
+                transformed_external.get("relevance"),
+                transformed_external.get("objects"),
+                transformed_external.get("matziah"),
+            ),
             "user_priority": transformed_external.get("user_priority"),
             "duo_to_use": transformed_external.get("duo_to_use"),
             "ground_point": transformed_external.get("ground_point"),
@@ -409,6 +419,8 @@ def update_quest_fields(quest_id: str, fields: dict):
         updated_status = update_quest_status(quest_id, str(next_status))
         if updated_status is None:
             return None
+        # finished_date is system-managed when status changes between open/finished flows.
+        update_data.pop("finished_date", None)
 
     if update_data:
         return update_quest(quest_id, update_data)

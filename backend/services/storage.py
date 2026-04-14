@@ -294,7 +294,7 @@ def get_quest_by_sync_external_id(external_id: str) -> Optional[Dict]:
 
 
 def save_quest(quest: Dict):
-    target_table = FINISHED_QUESTS_TABLE if quest.get("status") in {"Finished"} else OPEN_QUESTS_TABLE
+    target_table = FINISHED_QUESTS_TABLE if quest.get("status") in {"Finished", "Done", "Created"} else OPEN_QUESTS_TABLE
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(

@@ -15,7 +15,9 @@ import {
   DEFAULT_PRIORITY,
   EXTERNAL_QUEST_PRIORITY_OPTIONS,
   QUEST_PRIORITY_OPTIONS,
+  getMatziahLabel,
   getPriorityLabel,
+  isNezahMatziah,
   isDeadlinePriorityValue,
 } from '../utils/questOptions';
 import AccuracyModal from './AccuracyModal';
@@ -30,6 +32,8 @@ const getStatusClass = (status: string) => {
   if (category === 'start') return 'badge-open';
   return 'badge-in-progress';
 };
+
+const NULL_FT_COLOR = '#8b95a5';
 
 type MessageType = 'success' | 'error' | 'warning' | 'info';
 type QuestTableType = 'external' | 'open' | 'finished';
@@ -70,7 +74,7 @@ const QUEST_FIELD_SPECS: QuestFieldSpec[] = [
   { key: 'entry_date', label: 'תאריך כניסה', priority: 2, scope: 'C', editable: false, input: 'text' },
   { key: 'finished_date', label: 'תאריך סיום', priority: 2, scope: 'B', editable: false, input: 'text' },
   { key: 'notes', label: 'הערות', priority: 2, scope: 'D', editable: true, input: 'textarea' },
-  { key: 'target_type', label: 'כינוי / אופי מטרה', priority: 2, scope: 'C', editable: true, input: 'text' },
+  { key: 'target_type', label: 'כינוי/אופי מטרה', priority: 2, scope: 'C', editable: true, input: 'text' },
   { key: 'country', label: 'זירה', priority: 2, scope: 'A', editable: true, input: 'text' },
   { key: 'zarhan_notes', label: 'הערות מהצרכן', priority: 2, scope: 'C', editable: true, input: 'textarea' },
   { key: 'duo_to_use', label: 'צמד לשימוש', priority: 3, scope: 'D', editable: true, input: 'text' },
@@ -130,7 +134,7 @@ export default function QuestItem({
   };
   const questFt = String(quest.ft || '').trim();
   const hasFt = questFt.length > 0;
-  const ftClr = hasFt ? ftColor(questFt) : '#94a3b8';
+  const ftClr = hasFt ? ftColor(questFt) : NULL_FT_COLOR;
   const lowPriority = isLowPriorityQuest(quest);
   const deadlinePriority = isDeadlinePriorityValue(quest.priority);
   const deadlineSource = String(quest.deadline_at ?? '').trim();
@@ -139,9 +143,24 @@ export default function QuestItem({
     : getPriorityLabel(String(quest.priority || ''));
   const canTransferToOpen = isExternalQuest && !quest.isTransferred && !isViewer;
   const priorityOptions = isExternalQuest ? EXTERNAL_QUEST_PRIORITY_OPTIONS : QUEST_PRIORITY_OPTIONS;
-  const matziahValue = quest.matziah || '—';
+  const matziahValue = getMatziahLabel(quest.matziah);
+  const isNezahExternalQuest = isExternalQuest && isNezahMatziah(quest.matziah);
   const modelName = String(quest.model_simulations || '').trim();
   const hasModelName = modelName.length > 0;
+  const relevanceValue = quest.relevance;
+  const startDateValue = quest.entry_date || quest.date;
+  const objectsValue = quest.objects;
+  const externalNezahFields: Array<{ key: string; label: string; value: unknown }> = [
+    { key: 'target_name', label: 'שם מטרה (1A)', value: quest.title },
+    { key: 'ft', label: 'צוות ל (1A)', value: quest.ft },
+    { key: 'assigned_user', label: 'שם פותר', value: quest.assigned_user },
+    { key: 'target_type', label: 'כינוי/אופי מטרה (2C)', value: quest.target_type },
+    { key: 'objects', label: 'רכיבים', value: objectsValue },
+    { key: 'relevance', label: 'עדכניות', value: relevanceValue },
+    { key: 'priority', label: 'תעדוף', value: priorityDisplayValue },
+    { key: 'zarhan_notes', label: 'הערות מהצרכן (2C)', value: quest.zarhan_notes },
+  ];
+  const isZarhanField = (key: string) => key === 'zarhan_notes';
 
   const isScopeVisible = useCallback((scope: ScopeCode) => {
     if (scope === 'A') return true;
@@ -492,7 +511,7 @@ export default function QuestItem({
             <span style={S.dataBadge}>User Priority: {normalizeDisplayValue(quest.user_priority)}</span>
           )}
           <span style={{ ...S.ftBadge, background: `${ftClr}22`, color: ftClr, border: `1px solid ${ftClr}55` }}>
-            {hasFt ? questFt : 'ללא FT'}
+            {hasFt ? questFt : 'ללא צוות ל'}
           </span>
         </div>
         <span style={S.chevron}>{expanded ? '▲' : '▼'}</span>
@@ -503,7 +522,7 @@ export default function QuestItem({
 
       {/* Meta */}
       <div style={S.meta}>
-        <span style={S.metaItem}>📅 {quest.date}</span>
+        <span style={S.metaItem}>📅 {startDateValue}</span>
         {isScopeVisible('B') && hasValue(quest.assigned_user) && (
           <span style={S.metaItem}>👤 שם פותר: {quest.assigned_user}</span>
         )}
@@ -523,21 +542,36 @@ export default function QuestItem({
             onChange={(event) => void handleModelFolderFiles(event)}
           />
 
-          {quest.description && <p style={S.desc}>{quest.description}</p>}
-
           <div style={S.infoRow}>
             <span style={S.infoLabel}>מצייח:</span>
             <span style={S.infoValue}>{matziahValue}</span>
           </div>
-          {visibleExpandedPriorityTwoFields.length > 0 && (
+          {isNezahExternalQuest && (
             <div style={S.fieldGrid}>
-              {visibleExpandedPriorityTwoFields.map((field) => (
-                <div key={field.key} style={S.fieldCard}>
+              {externalNezahFields.map((field) => (
+                <div key={field.key} style={{ ...S.fieldCard, ...(isZarhanField(field.key) ? S.fieldCardExpanded : {}) }}>
                   <span style={S.fieldLabel}>{field.label}</span>
-                  <span style={S.fieldValue}>{normalizeDisplayValue(getFieldValue(field.key))}</span>
+                  <span style={{ ...S.fieldValue, ...(isZarhanField(field.key) ? S.fieldValueRtl : {}) }}>
+                    {normalizeDisplayValue(field.value)}
+                  </span>
                 </div>
               ))}
             </div>
+          )}
+          {!isNezahExternalQuest && visibleExpandedPriorityTwoFields.length > 0 && (
+            <div style={S.fieldGrid}>
+              {visibleExpandedPriorityTwoFields.map((field) => (
+                <div key={field.key} style={{ ...S.fieldCard, ...(isZarhanField(field.key) ? S.fieldCardExpanded : {}) }}>
+                  <span style={S.fieldLabel}>{field.label}</span>
+                  <span style={{ ...S.fieldValue, ...(isZarhanField(field.key) ? S.fieldValueRtl : {}) }}>
+                    {normalizeDisplayValue(getFieldValue(field.key))}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+          {isExternalQuest && !isNezahExternalQuest && (
+            <div style={S.syncHint}>פורמט Medidot/Azarim בתהליך</div>
           )}
 
           {(editingNotes || notesExists) && !isExternalQuest && (
@@ -592,10 +626,10 @@ export default function QuestItem({
 
           {quest.sync_external_id && (
             <div style={S.syncHint}>
-              {quest.matziah === 'N'
+              {isNezahMatziah(quest.matziah)
                 ? 'סטטוס מסונכרן גם למשימה החיצונית'
                 : isExternalQuest
-                  ? 'סטטוס מקומי בלבד עד שמצייח יעבור ל-N'
+                  ? 'סטטוס מקומי בלבד עד שמצייח יעבור לנצח/Nezah'
                   : 'המשימה מקושרת למקור חיצוני ללא סנכרון סטטוס אוטומטי'}
             </div>
           )}
@@ -750,7 +784,12 @@ export default function QuestItem({
                     </select>
                   ) : field.input === 'textarea' ? (
                     <textarea
-                      style={S.notesTextarea}
+                      style={{
+                        ...S.notesTextarea,
+                        ...(field.key === 'zarhan_notes' ? S.fieldValueRtl : {}),
+                        ...(field.key === 'zarhan_notes' ? S.zarhanNotesTextareaExpanded : {}),
+                      }}
+                      dir={field.key === 'zarhan_notes' ? 'rtl' : undefined}
                       value={addDataDraft[field.key] || ''}
                       rows={2}
                       onChange={(e) => setAddDataDraft((current) => ({ ...current, [field.key]: e.target.value }))}
@@ -911,6 +950,15 @@ const S: Record<string, CSSProperties> = {
     lineHeight: 1.4,
     wordBreak: 'break-word',
   },
+  fieldValueRtl: {
+    direction: 'rtl',
+    textAlign: 'right',
+    whiteSpace: 'pre-wrap',
+  },
+  fieldCardExpanded: {
+    gridColumn: '1 / -1',
+    minHeight: 92,
+  },
   notesSection: { marginBottom: 10 },
   notesHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
   notesLabel: { fontSize: 11, color: 'var(--text3)', fontWeight: 600 },
@@ -928,6 +976,10 @@ const S: Record<string, CSSProperties> = {
     resize: 'vertical',
     minHeight: 60,
     boxSizing: 'border-box',
+  },
+  zarhanNotesTextareaExpanded: {
+    minHeight: 120,
+    resize: 'both',
   },
   notesActions: { display: 'flex', gap: 6 },
   msgBar:   {

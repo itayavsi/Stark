@@ -72,7 +72,6 @@ export default function QuestPanel({
   const [showNew, setShowNew] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [newTitle, setNewTitle] = useState('');
-  const [newDesc, setNewDesc] = useState('');
   const [newYear, setNewYear] = useState(2026);
   const [newFt, setNewFt] = useState<FtOption>('FT1');
   const [newStatus, setNewStatus] = useState<string>(DEFAULT_STATUS);
@@ -330,7 +329,6 @@ export default function QuestPanel({
     try {
       await createQuest({
         title: newTitle,
-        description: newDesc,
         status: newStatus,
         priority: newPriority,
         deadline_at: isDeadlinePriorityValue(newPriority) ? newPriorityDeadlineAt : undefined,
@@ -340,7 +338,6 @@ export default function QuestPanel({
         group: 'לווינות',
       });
       setNewTitle('');
-      setNewDesc('');
       setNewYear(2026);
       setNewFt('FT1');
       setNewStatus(DEFAULT_STATUS);
@@ -563,16 +560,6 @@ export default function QuestPanel({
                             </td>
                           );
                         }
-                        if (col.key === 'description') {
-                          return (
-                            <td
-                              key={`${q.id}-description`}
-                              style={{ ...FS.td, width: getColumnWidth(col.key), color: 'var(--text2)', fontSize: 11 }}
-                            >
-                              {q.description || '—'}
-                            </td>
-                          );
-                        }
                         if (col.key === 'notes') {
                           return (
                             <td
@@ -694,8 +681,6 @@ export default function QuestPanel({
           <form onSubmit={handleCreate} style={S.newForm}>
             <input className="input" placeholder="כותרת משימה *" value={newTitle}
               onChange={e => setNewTitle(e.target.value)} required style={{ fontSize: 13 }} />
-            <textarea className="input" placeholder="תיאור (אופציונלי)" value={newDesc}
-              onChange={e => setNewDesc(e.target.value)} rows={2} style={{ resize: 'vertical', fontSize: 13 }} />
             <div style={{ display: 'flex', gap: 6 }}>
               <select className="input" value={newFt} onChange={e => setNewFt(e.target.value as FtOption)} style={{ fontSize: 13, flex: 1 }}>
                 {FT_OPTIONS.map(ft => <option key={ft} value={ft}>{ft}</option>)}

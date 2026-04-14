@@ -84,6 +84,45 @@ def _normalize_deadline(raw_deadline: Any) -> str | None:
     return str(raw_deadline)
 
 
+def _normalize_optional_text(value: Any) -> str | None:
+    if value in (None, ""):
+        return None
+    normalized = str(value).strip()
+    return normalized or None
+
+
+def compose_open_quest_zarhan_notes(
+    zarhan_notes: Any,
+    relevance: Any,
+    objects: Any,
+    matziah: Any = None,
+) -> str | None:
+    chunks: list[str] = []
+    normalized_zarhan = _normalize_optional_text(zarhan_notes)
+    if normalized_zarhan:
+        # Strip legacy lines like "מצייח: N" from consumer notes.
+        cleaned_lines = [
+            line
+            for line in normalized_zarhan.splitlines()
+            if not line.strip().startswith("מצייח:")
+        ]
+        normalized_zarhan = _normalize_optional_text("\n".join(cleaned_lines))
+    normalized_relevance = _normalize_optional_text(relevance)
+    normalized_objects = _normalize_optional_text(objects)
+    _ = matziah  # Intentionally ignored: מצייח should not be part of הערות מהצרכן.
+
+    if normalized_zarhan:
+        chunks.append(normalized_zarhan)
+    if normalized_relevance:
+        chunks.append(f"עדכניות: {normalized_relevance}")
+    if normalized_objects:
+        chunks.append(f"רכיבים: {normalized_objects}")
+
+    if not chunks:
+        return None
+    return "\n".join(chunks)
+
+
 def _extract_year(date_text: str) -> int:
     try:
         return int(date_text[:4])
@@ -105,7 +144,15 @@ def transform_external_quest_with_metadata(
     metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     metadata = metadata or {}
-    date_text = _normalize_date(item.get("relevancy:Date"))
+    relevance_text = _normalize_date(metadata.get("relevance") or metadata.get("relevancy:Date") or item.get("relevancy:Date"))
+    start_date_text = _normalize_date(
+        metadata.get("start_date")
+        or metadata.get("startDate")
+        or metadata.get("entry_date")
+        or item.get("start_date")
+        or item.get("startDate")
+        or item.get("entry_date")
+    )
     deadline_at = _normalize_deadline(
         metadata.get("deadline_at")
         or item.get("deadline_at")
@@ -117,7 +164,7 @@ def transform_external_quest_with_metadata(
     external_id = build_external_id(item)
 
     notes = str(item.get("notes", "") or "")
-    objects = item.get("objects")
+    objects = metadata.get("objects") or item.get("objects")
     priority = item.get("priority")
     model_name = metadata.get("model_name") or item.get("model_name") or item.get("model") or item.get("model_simulations")
     target_type = metadata.get("target_type") or item.get("target_type")
@@ -132,10 +179,12 @@ def transform_external_quest_with_metadata(
     duo_to_use = metadata.get("duo_to_use") or item.get("duo_to_use")
     ground_point = metadata.get("ground_point") or item.get("ground_point")
     solve_strategy = metadata.get("solve_strategy") or item.get("solve_strategy")
-    entry_date = metadata.get("entry_date") or item.get("entry_date") or date_text
+    entry_date = start_date_text
     finished_date = metadata.get("finished_date") or item.get("finished_date")
     matziah = str(metadata.get("matziah") or item.get("matziah") or "N")
     transferred_quest_id = metadata.get("transferred_quest_id")
+    ft_value = metadata.get("ft") if metadata.get("ft") not in (None, "") else item.get("ft")
+    normalized_ft = _normalize_optional_text(ft_value)
     extra_bits = []
     if priority not in (None, ""):
         extra_bits.append(f"Priority: {priority}")
@@ -150,7 +199,9 @@ def transform_external_quest_with_metadata(
         "description": " | ".join(extra_bits),
         "status": local_status,
         "priority": str(priority) if priority not in (None, "") else "",
-        "date": date_text,
+        "date": start_date_text,
+        "relevance": relevance_text,
+        "objects": str(objects) if objects not in (None, "") else None,
         "deadline_at": deadline_at,
         "assigned_user": str(item.get("opener", "") or "") or None,
         "shapefile_path": None,
@@ -162,12 +213,12 @@ def transform_external_quest_with_metadata(
         "duo_to_use": str(duo_to_use) if duo_to_use not in (None, "") else None,
         "ground_point": str(ground_point) if ground_point not in (None, "") else None,
         "solve_strategy": str(solve_strategy) if solve_strategy not in (None, "") else None,
-        "entry_date": str(entry_date) if entry_date not in (None, "") else date_text,
+        "entry_date": str(entry_date) if entry_date not in (None, "") else start_date_text,
         "finished_date": str(finished_date) if finished_date not in (None, "") else None,
         "group": str(item.get("group", EXTERNAL_QUESTS_GROUP) or EXTERNAL_QUESTS_GROUP),
-        "year": _extract_year(date_text),
-        "ft": str(item.get("ft", "FT1") or "FT1"),
-        "quest_type": str(item.get("ft", "FT1") or "FT1"),
+        "year": _extract_year(relevance_text),
+        "ft": normalized_ft,
+        "quest_type": normalized_ft,
         "matziah": matziah,
         "sync_external_id": external_id,
         "sync_source": str(item.get("source", "kipod") or "kipod"),
@@ -235,8 +286,11 @@ def build_external_quest_payload(data: dict[str, Any]) -> dict[str, Any]:
     date_text = _normalize_date(data.get("date"))
     deadline_at = _normalize_deadline(data.get("deadline_at"))
     local_status = str(data.get("status") or "Start")
-    quest_type = str(data.get("quest_type") or data.get("ft", "FT1") or "FT1")
-    return {
+    raw_quest_type = data.get("quest_type")
+    if raw_quest_type in (None, ""):
+        raw_quest_type = data.get("ft")
+    quest_type = _normalize_optional_text(raw_quest_type)
+    payload: dict[str, Any] = {
         "name": str(data.get("title", "")).strip(),
         "notes": str(data.get("description", "") or ""),
         "status": map_local_status_to_external(local_status),
@@ -246,9 +300,14 @@ def build_external_quest_payload(data: dict[str, Any]) -> dict[str, Any]:
         "opener": str(data.get("assigned_user", "") or ""),
         "group": str(data.get("group", EXTERNAL_QUESTS_GROUP) or EXTERNAL_QUESTS_GROUP),
         "year": data.get("year") or _extract_year(date_text),
-        "ft": quest_type,
         "matziah": str(data.get("matziah", "N") or "N"),
     }
+    if quest_type is not None:
+        payload["ft"] = quest_type
+    objects = _normalize_optional_text(data.get("objects"))
+    if objects is not None:
+        payload["objects"] = objects
+    return payload
 
 
 def _build_local_overrides(data: dict[str, Any], default_entry_date: str) -> dict[str, Any]:
@@ -257,6 +316,7 @@ def _build_local_overrides(data: dict[str, Any], default_entry_date: str) -> dic
         "target_type": data.get("target_type"),
         "country": data.get("country"),
         "zarhan_notes": data.get("zarhan_notes"),
+        "objects": data.get("objects"),
         "user_priority": data.get("user_priority"),
         "duo_to_use": data.get("duo_to_use"),
         "ground_point": data.get("ground_point"),

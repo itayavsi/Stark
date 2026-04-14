@@ -5,6 +5,8 @@ import type { FtOption, MatziahOption, QuestPriority, QuestStatus } from '../typ
 import {
   EXTERNAL_QUEST_PRIORITY_OPTIONS,
   MATZIAH_OPTIONS,
+  getMatziahSelectValue,
+  isNezahMatziah,
   isDeadlinePriorityValue,
   QUEST_PRIORITY_OPTIONS,
   getMatziahHint,
@@ -12,7 +14,6 @@ import {
 
 export interface QuestFormValue {
   title: string;
-  description: string;
   year: number;
   ft: FtOption | string;
   status: QuestStatus | string;
@@ -21,6 +22,8 @@ export interface QuestFormValue {
   target_type?: string;
   country?: string;
   zarhan_notes?: string;
+  quest_opener?: string;
+  objects?: string;
   date?: string;
   deadline_at?: string;
   assigned_user?: string;
@@ -31,6 +34,7 @@ interface QuestFormFieldsProps {
   value: QuestFormValue;
   onChange: (nextValue: QuestFormValue) => void;
   allowEmptyPriority?: boolean;
+  allowEmptyFt?: boolean;
   showDate?: boolean;
   showAssignedUser?: boolean;
   showGroup?: boolean;
@@ -43,11 +47,15 @@ export default function QuestFormFields({
   value,
   onChange,
   allowEmptyPriority = false,
+  allowEmptyFt = false,
   showDate = false,
   showAssignedUser = false,
   showGroup = false,
   showZiyuhFields = false,
 }: QuestFormFieldsProps) {
+  const matziahSelectValue = getMatziahSelectValue(value.matziah);
+  const showNezahFields = showZiyuhFields && isNezahMatziah(value.matziah);
+
   const updateField = <K extends keyof QuestFormValue>(field: K, nextFieldValue: QuestFormValue[K]) => {
     onChange({
       ...value,
@@ -60,27 +68,18 @@ export default function QuestFormFields({
     <>
       <input
         className="input"
-        placeholder="כותרת משימה *"
+        placeholder={showZiyuhFields ? 'שם מטרה *' : 'כותרת משימה *'}
         value={value.title}
         onChange={(event) => updateField('title', event.target.value)}
         required
         style={S.input}
       />
-      <textarea
-        className="input"
-        placeholder="תיאור (אופציונלי)"
-        value={value.description}
-        onChange={(event) => updateField('description', event.target.value)}
-        rows={3}
-        style={{ ...S.input, resize: 'vertical', minHeight: 84 }}
-      />
-
       {showZiyuhFields && (
         <>
           <div style={S.grid2}>
             <input
               className="input"
-              placeholder="כינוי / אופי מטרה"
+              placeholder="כינוי/אופי מטרה"
               value={value.target_type || ''}
               onChange={(event) => updateField('target_type', event.target.value)}
               style={S.input}
@@ -93,13 +92,30 @@ export default function QuestFormFields({
               style={S.input}
             />
           </div>
+          <input
+            className="input"
+            placeholder="פותח ציוח"
+            value={value.quest_opener || ''}
+            onChange={(event) => updateField('quest_opener', event.target.value)}
+            style={S.input}
+          />
+          {showNezahFields && (
+            <input
+              className="input"
+              placeholder="רכיבים"
+              value={value.objects || ''}
+              onChange={(event) => updateField('objects', event.target.value)}
+              style={S.input}
+            />
+          )}
           <textarea
             className="input"
             placeholder="הערות מהצרכן"
             value={value.zarhan_notes || ''}
             onChange={(event) => updateField('zarhan_notes', event.target.value)}
             rows={2}
-            style={{ ...S.input, resize: 'vertical' }}
+            dir="rtl"
+            style={{ ...S.input, ...S.zarhanNotesInput }}
           />
         </>
       )}
@@ -107,13 +123,16 @@ export default function QuestFormFields({
       {(showDate || showAssignedUser || showGroup) && (
         <div style={S.grid3}>
           {showDate && (
-            <input
-              className="input"
-              type="date"
-              value={value.date || ''}
-              onChange={(event) => updateField('date', event.target.value)}
-              style={S.input}
-            />
+            <div>
+              {showNezahFields && <div style={S.inlineLabel}>עדכניות</div>}
+              <input
+                className="input"
+                type="date"
+                value={value.date || ''}
+                onChange={(event) => updateField('date', event.target.value)}
+                style={S.input}
+              />
+            </div>
           )}
           {showAssignedUser && (
             <input
@@ -151,10 +170,15 @@ export default function QuestFormFields({
         </select>
         <select
           className="input"
-          value={value.ft}
+          value={value.ft || ''}
           onChange={(event) => updateField('ft', event.target.value as FtOption)}
           style={S.input}
         >
+          {allowEmptyFt && (
+            <option value="">
+              ללא צוות ל
+            </option>
+          )}
           {FT_OPTIONS.map((ft) => (
             <option key={ft} value={ft}>
               {ft}
@@ -190,7 +214,7 @@ export default function QuestFormFields({
         </select>
         <select
           className="input"
-          value={value.matziah}
+          value={matziahSelectValue}
           onChange={(event) => updateField('matziah', event.target.value as MatziahOption)}
           style={S.input}
         >
@@ -235,5 +259,18 @@ const S: Record<string, CSSProperties> = {
   hint: {
     fontSize: 11,
     color: 'var(--text3)',
+  },
+  inlineLabel: {
+    fontSize: 10,
+    color: 'var(--text3)',
+    marginBottom: 4,
+    fontWeight: 700,
+  },
+  zarhanNotesInput: {
+    resize: 'both',
+    minHeight: 120,
+    width: '100%',
+    direction: 'rtl',
+    textAlign: 'right',
   },
 };

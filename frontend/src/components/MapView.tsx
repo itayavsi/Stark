@@ -136,6 +136,7 @@ export default function MapView({
   const jumpMarkerRef = useRef<maplibregl.Marker | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [showPanel, setShowPanel] = useState(false);
+  const [showByFt, setShowByFt] = useState(true);
   const [mapSrc, setMapSrc] = useState('...');
   const [tooltip, setTooltip] = useState<{ name: string; continent: string; x: number; y: number } | null>(null);
   const [contextMenu, setContextMenu] = useState<{
@@ -255,7 +256,7 @@ export default function MapView({
 
   const syncLayerVisibility = useCallback((map: maplibregl.Map, questTypes: string[]) => {
     questTypes.forEach((questType) => {
-      const questTypeVisible = filters.questTypes[questType] ?? true;
+      const questTypeVisible = showByFt ? (filters.questTypes[questType] ?? true) : false;
       const pointVisibility = filters.showPoints && questTypeVisible ? 'visible' : 'none';
       const polygonVisibility = filters.showPolygons && questTypeVisible ? 'visible' : 'none';
 
@@ -269,7 +270,31 @@ export default function MapView({
         map.setLayoutProperty(polygonLineLayerId(questType), 'visibility', polygonVisibility);
       }
     });
-  }, [filters.questTypes, filters.showPoints, filters.showPolygons]);
+  }, [filters.questTypes, filters.showPoints, filters.showPolygons, showByFt]);
+
+  const handleShowByFtToggle = useCallback(() => {
+    const nextShowByFt = !showByFt;
+    setShowByFt(nextShowByFt);
+
+    if (!geometryCatalog?.quest_types?.length) return;
+
+    if (nextShowByFt) {
+      // Enabling FT filter: open all FT options.
+      geometryCatalog.quest_types.forEach((questType) => {
+        if ((filters.questTypes[questType] ?? true) === false) {
+          onToggleQuestType(questType);
+        }
+      });
+      return;
+    }
+
+    // Disabling FT filter: close all FT options.
+    geometryCatalog.quest_types.forEach((questType) => {
+      if ((filters.questTypes[questType] ?? true) === true) {
+        onToggleQuestType(questType);
+      }
+    });
+  }, [filters.questTypes, geometryCatalog?.quest_types, onToggleQuestType, showByFt]);
 
   useEffect(() => {
     if (mapRef.current) {
@@ -664,8 +689,16 @@ export default function MapView({
     <details open style={S.section}>
       <summary style={S.sectionTitle}>על פי צל</summary>
 
+      <label style={S.layerRow}>
+        <span style={S.questLabel}>הצג לפי FT</span>
+        <input
+          type="checkbox"
+          checked={showByFt}
+          onChange={handleShowByFtToggle}
+        />
+      </label>
 
-      {geometryCatalog?.quest_types.length ? (
+      {showByFt && geometryCatalog?.quest_types.length ? (
         geometryCatalog.quest_types.map((questType) => (
           <label key={questType} style={S.layerRow}>
                         <span
@@ -690,7 +723,7 @@ export default function MapView({
           </label>
         ))
       ) : (
-        <div style={S.empty}>No geometry yet</div>
+        <div style={S.empty}>{showByFt ? 'No geometry yet' : 'FT layers hidden'}</div>
       )}
     </details>
   </div>
@@ -843,6 +876,9 @@ const S: Record<string, CSSProperties> = {
     padding: '6px 0',
     fontSize: 12,
     cursor: 'pointer',
+  },
+  layerRowMuted: {
+    opacity: 0.55,
   },
   
   legendColor: {

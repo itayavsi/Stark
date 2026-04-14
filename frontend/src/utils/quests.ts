@@ -44,6 +44,7 @@ const LEGACY_STATUS_MAP: Record<string, string> = {
   Taken: 'Production',
   'In Progress': 'Production',
   Done: 'Finished',
+  Created: 'Finished',
   Approved: 'Finished',
   Stopped: 'Paused',
   Cancelled: 'Paused',
@@ -158,7 +159,7 @@ function matchesQuestSearch(quest: Quest, search: string): boolean {
     return true;
   }
 
-  return [quest.title, quest.description, quest.ft]
+  return [quest.title, quest.ft]
     .filter(Boolean)
     .some((value) => String(value).includes(normalizedSearch));
 }

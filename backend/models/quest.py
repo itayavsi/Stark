@@ -74,6 +74,7 @@ class QuestCreate(BaseModel):
     target_type: Optional[str] = None
     country: Optional[str] = None
     zarhan_notes: Optional[str] = None
+    objects: Optional[str] = None
     user_priority: Optional[str] = None
     duo_to_use: Optional[str] = None
     ground_point: Optional[str] = None
@@ -101,6 +102,7 @@ class ExternalQuestCreate(BaseModel):
     target_type: Optional[str] = None
     country: Optional[str] = None
     zarhan_notes: Optional[str] = None
+    objects: Optional[str] = None
     user_priority: Optional[str] = None
     duo_to_use: Optional[str] = None
     ground_point: Optional[str] = None

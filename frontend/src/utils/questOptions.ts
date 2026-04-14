@@ -57,11 +57,38 @@ export function isDeadlinePriorityValue(priority: string | undefined): boolean {
 }
 
 export const MATZIAH_OPTIONS: Array<{ value: MatziahOption; label: string; hint: string }> = [
-  { value: 'N', label: 'N', hint: 'מסנכרן סטטוס מול המשימה החיצונית' },
-  { value: 'H', label: 'H', hint: 'שומר את המשימה פנימית ללא סנכרון חיצוני' },
-  { value: 'M', label: 'M', hint: 'מצב ידני ללא סנכרון אוטומטי' },
+  { value: 'Nezah', label: 'נצח', hint: 'מסנכרן סטטוס מול המשימה החיצונית' },
+  { value: 'Medidot', label: 'Medidot', hint: 'תהליך בתצוגה זמנית' },
+  { value: 'Azarim', label: 'Azarim', hint: 'תהליך בתצוגה זמנית' },
 ];
 
 export function getMatziahHint(value: MatziahOption | string | undefined): string {
-  return MATZIAH_OPTIONS.find((option) => option.value === value)?.hint || '';
+  const key = getMatziahSelectValue(value);
+  return MATZIAH_OPTIONS.find((option) => option.value === key)?.hint || '';
+}
+
+export function getMatziahLabel(value: MatziahOption | string | undefined): string {
+  if (!value) return '—';
+  const key = getMatziahSelectValue(value);
+  return MATZIAH_OPTIONS.find((option) => option.value === key)?.label || String(value);
+}
+
+export function isNezahMatziah(value: MatziahOption | string | undefined): boolean {
+  const normalized = String(value || '').trim().toLowerCase();
+  return normalized === 'nezah' || normalized === 'n';
+}
+
+export function getMatziahSelectValue(value: MatziahOption | string | undefined): MatziahOption {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'n' || normalized === 'nezah') return 'Nezah';
+  if (normalized === 'm' || normalized === 'medidot') return 'Medidot';
+  if (normalized === 'h' || normalized === 'azarim') return 'Azarim';
+  return 'Nezah';
+}
+
+export function toLegacyMatziahCode(value: MatziahOption | string | undefined): 'N' | 'M' | 'H' {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'm' || normalized === 'medidot') return 'M';
+  if (normalized === 'h' || normalized === 'azarim') return 'H';
+  return 'N';
 }

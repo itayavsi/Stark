@@ -50,17 +50,16 @@ export type QuestPriority = 'א+' | 'א' | 'ב' | 'ג' | 'ד' | 'ה' | 'deadline
 
 export type FtOption = string;
 
-export type MatziahOption = 'N' | 'H' | 'M';
+export type MatziahOption = 'Nezah' | 'Medidot' | 'Azarim' | 'N' | 'M' | 'H';
 export type GeometryType = 'point' | 'polygon';
 export type GeometryStatus = 'missing' | 'pending' | 'ready' | 'error';
 
 export interface Quest {
   id: string;
   title: string;
-  description?: string;
   notes?: string;
-  ft?: FtOption | string;
-  quest_type?: FtOption | string;
+  ft?: FtOption | string | null;
+  quest_type?: FtOption | string | null;
   status: QuestStatus | string;
   priority?: QuestPriority | string;
   isNew?: boolean;
@@ -74,6 +73,8 @@ export interface Quest {
   target_type?: string;
   country?: string;
   zarhan_notes?: string;
+  relevance?: string;
+  objects?: string;
   user_priority?: string;
   duo_to_use?: string;
   ground_point?: string;
@@ -107,7 +108,6 @@ export interface LoginResponse {
 
 export interface CreateQuestInput {
   title: string;
-  description?: string;
   status?: QuestStatus | string;
   priority?: QuestPriority | string;
   date?: string;
@@ -116,11 +116,12 @@ export interface CreateQuestInput {
   deadline_at?: string | null;
   assigned_user?: string;
   year?: number;
-  ft?: FtOption | string;
-  quest_type?: FtOption | string;
+  ft?: FtOption | string | null;
+  quest_type?: FtOption | string | null;
   target_type?: string;
   country?: string;
   zarhan_notes?: string;
+  objects?: string;
   user_priority?: string;
   duo_to_use?: string;
   ground_point?: string;
@@ -137,7 +138,6 @@ export interface CreateQuestInput {
 
 export interface CreateExternalQuestInput {
   title: string;
-  description?: string;
   status?: QuestStatus | string;
   priority?: QuestPriority | string;
   date?: string;
@@ -146,11 +146,12 @@ export interface CreateExternalQuestInput {
   deadline_at?: string | null;
   assigned_user?: string;
   year?: number;
-  ft?: FtOption | string;
-  quest_type?: FtOption | string;
+  ft?: FtOption | string | null;
+  quest_type?: FtOption | string | null;
   target_type?: string;
   country?: string;
   zarhan_notes?: string;
+  objects?: string;
   user_priority?: string;
   duo_to_use?: string;
   ground_point?: string;
@@ -185,7 +186,6 @@ export interface GeometryCatalog {
 export interface QuestGeometryRecord {
   quest_id: string;
   title: string;
-  description?: string;
   status: QuestStatus | string;
   priority?: QuestPriority | string;
   date?: string;
@@ -193,8 +193,8 @@ export interface QuestGeometryRecord {
   assigned_user?: string | null;
   group?: string;
   year?: number;
-  ft?: FtOption | string;
-  quest_type?: FtOption | string;
+  ft?: FtOption | string | null;
+  quest_type?: FtOption | string | null;
   matziah?: MatziahOption | string;
   geometry_type?: GeometryType | GeometryType[] | null;
   geometry_status: GeometryStatus | string;
