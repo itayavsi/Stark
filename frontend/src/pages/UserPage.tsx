@@ -23,6 +23,13 @@ const ROLE_LABELS: Record<UserRole, string> = {
 };
 
 const ROLE_OPTIONS: UserRole[] = ['Team Leader', 'User', 'Viewer'];
+type TimeRangeUnit = 'hour' | 'day' | 'month' | 'year';
+const TIME_RANGE_UNIT_LABEL: Record<TimeRangeUnit, string> = {
+  hour: 'שעות',
+  day: 'ימים',
+  month: 'חודשים',
+  year: 'שנים',
+};
 
 interface UserEditState {
   display_name: string;
@@ -57,6 +64,8 @@ export default function UserPage() {
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [ftEntries, setFtEntries] = useState<FtConfigEntry[]>([]);
+  const [finishedRangeAmount, setFinishedRangeAmount] = useState<number>(30);
+  const [finishedRangeUnit, setFinishedRangeUnit] = useState<TimeRangeUnit>('hour');
   const [ftSaving, setFtSaving] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -133,6 +142,35 @@ export default function UserPage() {
     () => myQuests.filter((quest) => isFinishedStatus(quest.status)),
     [myQuests]
   );
+  const finishedInRangeCount = useMemo(() => {
+    const amount = Math.max(1, Number.isFinite(finishedRangeAmount) ? Math.floor(finishedRangeAmount) : 1);
+    const now = new Date();
+    const start = new Date(now);
+
+    if (finishedRangeUnit === 'hour') {
+      start.setHours(now.getHours() - amount);
+    } else if (finishedRangeUnit === 'day') {
+      start.setDate(now.getDate() - amount);
+    } else if (finishedRangeUnit === 'month') {
+      start.setMonth(now.getMonth() - amount);
+    } else {
+      start.setFullYear(now.getFullYear() - amount);
+    }
+
+    return myDoneQuests.filter((quest) => {
+      const rawFinishedDate = String(quest.finished_date || '').trim() || String(quest.date || '').trim();
+      if (!rawFinishedDate) {
+        return false;
+      }
+
+      const finishedDate = new Date(rawFinishedDate);
+      if (Number.isNaN(finishedDate.getTime())) {
+        return false;
+      }
+
+      return finishedDate >= start && finishedDate <= now;
+    }).length;
+  }, [finishedRangeAmount, finishedRangeUnit, myDoneQuests]);
   const myHighPriorityQuests = useMemo(
     () => myQuests.filter((quest) => isHighPriorityQuest(quest)),
     [myQuests]
@@ -368,6 +406,37 @@ export default function UserPage() {
               <div style={S.stat}><strong>{myActiveQuests.length}</strong><span>פעילות</span></div>
               <div style={S.stat}><strong>{myDoneQuests.length}</strong><span>הושלמו</span></div>
               <div style={S.stat}><strong>{myHighPriorityQuests.length}</strong><span>גבוהות</span></div>
+            </div>
+            <div style={S.finishedRangeCard}>
+              <div style={S.finishedRangeHeader}>הושלמו בטווח זמן</div>
+              <div style={S.finishedRangeControls}>
+                <input
+                  className="input"
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={finishedRangeAmount}
+                  onChange={(event) => {
+                    const next = Number(event.target.value);
+                    setFinishedRangeAmount(Number.isFinite(next) && next > 0 ? next : 1);
+                  }}
+                  style={S.finishedRangeAmountInput}
+                />
+                <select
+                  className="input"
+                  value={finishedRangeUnit}
+                  onChange={(event) => setFinishedRangeUnit(event.target.value as TimeRangeUnit)}
+                  style={S.finishedRangeUnitSelect}
+                >
+                  <option value="hour">שעות</option>
+                  <option value="day">ימים</option>
+                  <option value="month">חודשים</option>
+                  <option value="year">שנים</option>
+                </select>
+              </div>
+              <div style={S.finishedRangeResult}>
+                {finishedInRangeCount} משימות הושלמו ב-{finishedRangeAmount} {TIME_RANGE_UNIT_LABEL[finishedRangeUnit]} האחרונות
+              </div>
             </div>
             <div style={S.metaNote}>בקבוצה שלך קיימות כרגע {groupQuestCount} משימות</div>
           </article>
@@ -705,6 +774,40 @@ const S: Record<string, CSSProperties> = {
     marginTop: 12,
     fontSize: 12,
     color: 'var(--text3)',
+  },
+  finishedRangeCard: {
+    marginTop: 12,
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--radius)',
+    background: 'var(--surface2)',
+    padding: '12px 10px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 8,
+  },
+  finishedRangeHeader: {
+    fontSize: 12,
+    color: 'var(--text2)',
+    fontWeight: 700,
+  },
+  finishedRangeControls: {
+    display: 'flex',
+    gap: 8,
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
+  finishedRangeAmountInput: {
+    width: 96,
+    fontSize: 13,
+  },
+  finishedRangeUnitSelect: {
+    minWidth: 110,
+    fontSize: 13,
+  },
+  finishedRangeResult: {
+    fontSize: 13,
+    color: 'var(--text)',
+    fontWeight: 600,
   },
   section: {
     display: 'flex',

@@ -9,9 +9,9 @@ import {
 
 import { useAuth } from '../context/AuthContext';
 import { getStoredQuestSortOrder, saveStoredQuestSortOrder } from '../lib/questSortStorage';
-import { createQuest, setQuestStatus } from '../services/api';
-import { FT_OPTIONS, ftColor } from '../services/ftConfig';
-import type { FtOption, GeometryCatalog, LngLatPoint, Quest } from '../types/domain';
+import { createExternalQuest, setQuestStatus } from '../services/api';
+import { ftColor } from '../services/ftConfig';
+import type { GeometryCatalog, LngLatPoint, Quest } from '../types/domain';
 import { parseD, parseDD, parseDMS, parseUTM } from '../utils/geo';
 import {
   QUEST_SORT_OPTIONS,
@@ -36,13 +36,12 @@ import {
 } from '../config/questTableColumns';
 import { filterQuests } from '../utils/quests';
 import {
-  DEFAULT_PRIORITY,
   DEFAULT_STATUS,
-  QUICK_CREATE_STATUS_OPTIONS,
-  QUEST_PRIORITY_OPTIONS,
   getPriorityLabel,
   isDeadlinePriorityValue,
+  toLegacyMatziahCode,
 } from '../utils/questOptions';
+import QuestFormFields, { type QuestFormValue } from './QuestFormFields';
 import QuestItem from './QuestItem';
 
 interface QuestPanelProps {
@@ -52,6 +51,26 @@ interface QuestPanelProps {
   onRefresh: () => Promise<GeometryCatalog | null> | GeometryCatalog | null;
   onShowOnMap: (quest: Quest, catalogOverride?: GeometryCatalog | null) => Promise<void> | void;
   onJumpToPoint: (point: LngLatPoint) => void;
+}
+
+function getToday() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function composeZarhanNotes(baseNotes: string | undefined, questOpener: string | undefined): string | undefined {
+  const normalizedBase = String(baseNotes || '').trim();
+  const normalizedOpener = String(questOpener || '').trim();
+  if (!normalizedBase && !normalizedOpener) {
+    return undefined;
+  }
+  if (!normalizedOpener) {
+    return normalizedBase;
+  }
+  const openerLine = `פותח ציוח: ${normalizedOpener}`;
+  if (!normalizedBase) {
+    return openerLine;
+  }
+  return `${normalizedBase}\n${openerLine}`;
 }
 
 export default function QuestPanel({
@@ -71,12 +90,28 @@ export default function QuestPanel({
   const [searchScope, setSearchScope] = useState<QuestSearchScope>('current');
   const [showNew, setShowNew] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
-  const [newTitle, setNewTitle] = useState('');
-  const [newYear, setNewYear] = useState(2026);
-  const [newFt, setNewFt] = useState<FtOption>('FT1');
-  const [newStatus, setNewStatus] = useState<string>(DEFAULT_STATUS);
-  const [newPriority, setNewPriority] = useState<string>(DEFAULT_PRIORITY);
-  const [newPriorityDeadlineAt, setNewPriorityDeadlineAt] = useState('');
+  const initialNewQuestForm = useMemo<QuestFormValue>(
+    () => ({
+      title: '',
+      year: 2026,
+      ft: 'FT1',
+      status: DEFAULT_STATUS,
+      priority: '',
+      matziah: 'Nezah',
+      target_type: '',
+      country: '',
+      zarhan_notes: '',
+      quest_opener: '',
+      objects: '',
+      date: getToday(),
+      deadline_at: '',
+      assigned_user: user?.display_name || user?.username || '',
+      group: user?.group || 'לווינות',
+    }),
+    [user?.display_name, user?.group, user?.username]
+  );
+  const [newQuestForm, setNewQuestForm] = useState<QuestFormValue>(initialNewQuestForm);
+  const [newQuestError, setNewQuestError] = useState('');
   const [showJump, setShowJump] = useState(false);
   const [jumpMode, setJumpMode] = useState<'utm' | 'dd' | 'd' | 'dms'>('utm');
   const [showMoreJumpFormats, setShowMoreJumpFormats] = useState(false);
@@ -116,6 +151,10 @@ export default function QuestPanel({
     [quests, view, search, searchScope]
   );
   const filtered = filteredBase;
+
+  useEffect(() => {
+    setNewQuestForm(initialNewQuestForm);
+  }, [initialNewQuestForm]);
   const questCountByView = useMemo<Record<QuestViewId, number>>(
     () => ({
       open: filterQuests(quests, 'open', '', 'current').length,
@@ -317,36 +356,40 @@ export default function QuestPanel({
 
   const handleCreate = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!newTitle.trim()) {
+    if (!newQuestForm.title.trim()) {
       return;
     }
-    if (isDeadlinePriorityValue(newPriority) && !newPriorityDeadlineAt) {
+    if (isDeadlinePriorityValue(newQuestForm.priority) && (!newQuestForm.deadline_at || !newQuestForm.deadline_at.includes('T'))) {
       alert('לתעדוף זמן מוגדר יש להזין תאריך ושעה');
       return;
     }
 
     setCreating(true);
+    setNewQuestError('');
     try {
-      await createQuest({
-        title: newTitle,
-        status: newStatus,
-        priority: newPriority,
-        deadline_at: isDeadlinePriorityValue(newPriority) ? newPriorityDeadlineAt : undefined,
-        year: newYear,
-        ft: newFt,
-        quest_type: newFt,
-        group: 'לווינות',
+      const mergedZarhanNotes = composeZarhanNotes(newQuestForm.zarhan_notes, newQuestForm.quest_opener);
+      await createExternalQuest({
+        title: newQuestForm.title.trim(),
+        status: DEFAULT_STATUS,
+        priority: newQuestForm.priority || undefined,
+        date: newQuestForm.date,
+        entry_date: getToday(),
+        deadline_at: newQuestForm.deadline_at || undefined,
+        year: newQuestForm.year,
+        ft: String(newQuestForm.ft || '').trim() ? String(newQuestForm.ft).trim() : null,
+        target_type: newQuestForm.target_type?.trim() || undefined,
+        country: newQuestForm.country?.trim() || undefined,
+        zarhan_notes: mergedZarhanNotes,
+        objects: newQuestForm.objects?.trim() || undefined,
+        group: newQuestForm.group?.trim() || 'לווינות',
+        matziah: toLegacyMatziahCode(newQuestForm.matziah),
       });
-      setNewTitle('');
-      setNewYear(2026);
-      setNewFt('FT1');
-      setNewStatus(DEFAULT_STATUS);
-      setNewPriority(DEFAULT_PRIORITY);
-      setNewPriorityDeadlineAt('');
+      setNewQuestForm(initialNewQuestForm);
       setShowNew(false);
       await onRefresh();
-    } catch {
-      alert('שגיאה ביצירת משימה');
+    } catch (error: any) {
+      const message = error?.response?.data?.detail || 'שגיאה ביצירת משימה';
+      setNewQuestError(message);
     } finally {
       setCreating(false);
     }
@@ -668,66 +711,13 @@ export default function QuestPanel({
               {showJump ? '✕ סגור' : '📍'}
             </button>
             {isLeader && (
-              <button className="btn btn-primary btn-sm" onClick={() => setShowNew(v => !v)}>
-                {showNew ? '✕' : '+ חדש'}
+              <button className="btn btn-primary btn-sm" onClick={() => setShowNew(true)}>
+                + חדש
               </button>
             )}
             <button className="btn btn-ghost btn-sm" onClick={() => setFullscreen(true)} title="מסך מלא">⛶</button>
           </div>
         </div>
-
-        {/* New quest form */}
-        {showNew && isLeader && (
-          <form onSubmit={handleCreate} style={S.newForm}>
-            <input className="input" placeholder="כותרת משימה *" value={newTitle}
-              onChange={e => setNewTitle(e.target.value)} required style={{ fontSize: 13 }} />
-            <div style={{ display: 'flex', gap: 6 }}>
-              <select className="input" value={newFt} onChange={e => setNewFt(e.target.value as FtOption)} style={{ fontSize: 13, flex: 1 }}>
-                {FT_OPTIONS.map(ft => <option key={ft} value={ft}>{ft}</option>)}
-              </select>
-              <select className="input" value={newStatus} onChange={e => setNewStatus(e.target.value)} style={{ fontSize: 13, flex: 1 }}>
-                {QUICK_CREATE_STATUS_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <select
-                className="input"
-                value={newPriority}
-                onChange={e => {
-                  const nextPriority = e.target.value;
-                  setNewPriority(nextPriority);
-                  if (!isDeadlinePriorityValue(nextPriority)) {
-                    setNewPriorityDeadlineAt('');
-                  }
-                }}
-                style={{ fontSize: 13, flex: 1 }}
-              >
-                {QUEST_PRIORITY_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-              <button className="btn btn-primary" type="submit" disabled={creating || !newTitle.trim()}>
-                {creating ? '...' : 'צור'}
-              </button>
-            </div>
-            {isDeadlinePriorityValue(newPriority) && (
-              <input
-                className="input"
-                type="datetime-local"
-                value={newPriorityDeadlineAt}
-                onChange={(e) => setNewPriorityDeadlineAt(e.target.value)}
-                style={{ fontSize: 13 }}
-                required
-              />
-            )}
-          </form>
-        )}
 
         {showJump && (
           <form onSubmit={handleJumpSubmit} style={S.jumpForm}>
@@ -992,6 +982,70 @@ export default function QuestPanel({
         </div>
       )}
 
+      {showNew && isLeader && (
+        <div
+          style={S.newQuestOverlay}
+          onClick={() => {
+            if (creating) return;
+            setShowNew(false);
+            setNewQuestError('');
+          }}
+        >
+          <div
+            style={S.newQuestModal}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div style={S.newQuestModalHeader}>
+              <div>
+                <h3 style={S.newQuestModalTitle}>פתיחת ציוח חדש</h3>
+                <p style={S.newQuestModalSubtitle}>אותם שדות כמו עמוד הציוח החיצוני</p>
+              </div>
+              <button
+                className="btn btn-ghost btn-sm"
+                type="button"
+                onClick={() => {
+                  if (creating) return;
+                  setShowNew(false);
+                  setNewQuestError('');
+                }}
+              >
+                ✕
+              </button>
+            </div>
+            <form onSubmit={handleCreate} style={S.newQuestModalForm}>
+              <QuestFormFields
+                value={newQuestForm}
+                onChange={setNewQuestForm}
+                allowEmptyPriority
+                allowEmptyFt
+                showDate
+                showGroup
+                showZiyuhFields
+              />
+
+              {newQuestError && <div style={S.newQuestErrorBox}>{newQuestError}</div>}
+
+              <div style={S.newQuestModalActions}>
+                <button
+                  className="btn btn-ghost"
+                  type="button"
+                  onClick={() => {
+                    if (creating) return;
+                    setShowNew(false);
+                    setNewQuestError('');
+                  }}
+                >
+                  ביטול
+                </button>
+                <button className="btn btn-primary" type="submit" disabled={creating || !newQuestForm.title.trim()}>
+                  {creating ? 'שומר...' : 'פתח ציוח'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
@@ -1066,7 +1120,6 @@ const S: Record<string, CSSProperties> = {
     fontSize:10,
     fontWeight:800,
   },
-  newForm: { display:'flex', flexDirection:'column', gap:6, background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:10 },
   jumpForm: { display:'flex', flexDirection:'column', gap:8, background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:'var(--radius)', padding:10 },
   jumpHeader: { fontSize:12, fontWeight:700, color:'var(--text)' },
   jumpToggleRow: { display:'flex', gap:6 },
@@ -1113,6 +1166,66 @@ const S: Record<string, CSSProperties> = {
   },
   notificationIcon: { fontSize:16, flexShrink:0 },
   notificationText: { fontSize:12, fontWeight:600, lineHeight:1.4 },
+  newQuestOverlay: {
+    position: 'fixed',
+    inset: 0,
+    zIndex: 2200,
+    background: 'rgba(0, 0, 0, 0.58)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    backdropFilter: 'blur(3px)',
+  },
+  newQuestModal: {
+    width: 'min(760px, 100%)',
+    maxHeight: 'calc(100vh - 40px)',
+    overflowY: 'auto',
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--radius-lg)',
+    boxShadow: 'var(--shadow)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 12,
+    padding: 16,
+  },
+  newQuestModalHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+  },
+  newQuestModalTitle: {
+    margin: 0,
+    fontSize: 18,
+    color: 'var(--text)',
+  },
+  newQuestModalSubtitle: {
+    margin: 0,
+    fontSize: 12,
+    color: 'var(--text3)',
+  },
+  newQuestModalForm: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 10,
+  },
+  newQuestModalActions: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  newQuestErrorBox: {
+    borderRadius: 10,
+    border: '1px solid rgba(239,68,68,0.32)',
+    background: 'rgba(239,68,68,0.08)',
+    color: '#f87171',
+    padding: '10px 12px',
+    fontSize: 13,
+  },
 };
 
 // ── Fullscreen / Excel styles ─────────────────────────────────
